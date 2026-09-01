@@ -1,0 +1,5 @@
+# pnpm v11 settings live here.
+allowBuilds:
+  sharp: true
+  unrs-resolver: true
+verifyDepsBeforeRun: false

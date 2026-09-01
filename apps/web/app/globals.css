@@ -1,0 +1,254 @@
+:root {
+  --cn-bg: #f6f7f9;
+  --cn-surface: #ffffff;
+  --cn-border: #e2e5ea;
+  --cn-text: #1b2430;
+  --cn-text-muted: #6b7685;
+  --cn-primary: #1f3a5f;
+  --cn-primary-hover: #16304f;
+  --cn-accent: #c7a03a;
+  --cn-danger: #a33d3d;
+  --cn-ok: #2f7a4d;
+  --cn-radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--cn-bg);
+  color: var(--cn-text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--cn-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  background: var(--cn-surface);
+  border-bottom: 1px solid var(--cn-border);
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.3px;
+}
+
+.brand-sub {
+  color: var(--cn-text-muted);
+  font-size: 0.8rem;
+}
+
+.app-nav {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.app-nav a {
+  color: var(--cn-text-muted);
+  font-weight: 500;
+}
+
+.app-nav a.active,
+.app-nav a[aria-current='page'] {
+  color: var(--cn-primary);
+  font-weight: 600;
+}
+
+.app-main {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--cn-surface);
+  border: 1px solid var(--cn-border);
+  border-radius: var(--cn-radius);
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 1.05rem;
+  color: var(--cn-primary);
+}
+
+.card p {
+  color: var(--cn-text-muted);
+  margin: 0.4rem 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.badge-ok {
+  background: #e5f3ea;
+  color: var(--cn-ok);
+}
+
+.badge-warn {
+  background: #f6efe1;
+  color: #8a6d1f;
+}
+
+.badge-danger {
+  background: #f6e5e5;
+  color: var(--cn-danger);
+}
+
+.badge-muted {
+  background: #eef0f3;
+  color: var(--cn-text-muted);
+}
+
+.notice {
+  background: #fdf6e7;
+  border: 1px solid #ecd9ae;
+  border-radius: var(--cn-radius);
+  padding: 0.75rem 1rem;
+  color: #7a5c14;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.app-footer {
+  border-top: 1px solid var(--cn-border);
+  padding: 1rem 2rem;
+  color: var(--cn-text-muted);
+  font-size: 0.8rem;
+  text-align: center;
+  background: var(--cn-surface);
+}
+
+.btn {
+  display: inline-block;
+  background: var(--cn-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--cn-radius);
+  padding: 0.7rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn:hover {
+  background: var(--cn-primary-hover);
+  text-decoration: none;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--cn-primary);
+  border: 1px solid var(--cn-border);
+}
+
+.btn-ghost:hover {
+  background: var(--cn-bg);
+}
+
+input[type='text'],
+input[type='password'] {
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--cn-border);
+  border-radius: var(--cn-radius);
+  font-size: 0.95rem;
+  background: #fff;
+  color: var(--cn-text);
+}
+
+label.field-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--cn-text-muted);
+}
+
+.stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 720px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.muted {
+  color: var(--cn-text-muted);
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.status-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.status-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--cn-border);
+}
+
+.status-list li:last-child {
+  border-bottom: none;
+}
