@@ -26,6 +26,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least-privilege permissions. `security-events: write` is required so the CodeQL
+# SARIF upload action can publish Trivy results to code scanning.
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   # ---------- Backend: lint, format, typecheck, tests ----------
   backend:
