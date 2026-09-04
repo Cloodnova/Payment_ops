@@ -24,6 +24,7 @@ dependencies = [
     "structlog>=24.4",
     "prometheus-client>=0.21",
     "lxml>=5.3",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +46,8 @@ where = ["packages", "apps/api", "apps/worker"]
 target-version = "py312"
 line-length = 100
 src = ["packages", "apps", "tests"]
+# Vendored upstream code is never linted/formatted/modified.
+exclude = ["third_party"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "S", "C4", "TID"]
@@ -67,7 +70,7 @@ strict = true
 packages = ["paymentops_api", "paymentops_worker", "payment_domain"]
 mypy_path = ["packages", "apps/api", "apps/worker"]
 plugins = ["pydantic.mypy"]
-exclude = ["alembic/", "migrations/"]
+exclude = ["alembic/", "migrations/", "third_party/"]
 
 [[tool.mypy.overrides]]
 module = ["celery.*", "kombu.*", "billiard.*", "redis.*"]

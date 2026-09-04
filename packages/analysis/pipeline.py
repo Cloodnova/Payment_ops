@@ -74,10 +74,18 @@ class AnalysisPipeline:
         # 6. Address analysis (per party/agent address).
         address_analyses: list[AnalysisAddress] = []
         overall_readiness: list[AddressReadiness] = []
+        any_fallback = False
+        provider_used: str | None = None
+        provider_version_used: str | None = None
         for tx in message.transactions:
             for label, addr in addresses(tx):
                 analysis = self._address_provider.analyze(addr)
                 overall_readiness.append(analysis.readiness)
+                if analysis.fallback:
+                    any_fallback = True
+                if analysis.available:
+                    provider_used = analysis.provider
+                    provider_version_used = analysis.provider_version
                 address_analyses.append(
                     AnalysisAddress(
                         party=label,
@@ -88,6 +96,7 @@ class AnalysisPipeline:
                         provider=analysis.provider,
                         provider_version=analysis.provider_version,
                         note=analysis.note,
+                        fallback=analysis.fallback,
                     )
                 )
 
@@ -141,11 +150,12 @@ class AnalysisPipeline:
             if (include_candidate_xml and candidate and candidate.xml)
             else None,
             ruleset_version=self._rules_engine.version,
-            address_provider=self._address_provider.name,
-            address_provider_version=self._address_provider.version,
+            address_provider=provider_used,
+            address_provider_version=provider_version_used,
+            address_provider_fallback=any_fallback,
             input_hash=input_hash,
             output_hash=output_hash,
-            warnings=_warnings(xsd_result.valid, candidate),
+            warnings=_warnings(xsd_result.valid, candidate, any_fallback),
         )
 
 
@@ -161,10 +171,14 @@ def _aggregate_readiness(levels: list[AddressReadiness]) -> str:
     return "REPAIRABLE"
 
 
-def _warnings(xsd_valid: bool, candidate: RepairCandidate | None) -> list[str]:
+def _warnings(
+    xsd_valid: bool, candidate: RepairCandidate | None, any_fallback: bool = False
+) -> list[str]:
     warnings: list[str] = []
     if not xsd_valid:
         warnings.append("Original message did not pass XSD validation")
     if candidate and candidate.status.value == "REVIEW_REQUIRED":
         warnings.append("Repair candidate requires human review")
+    if any_fallback:
+        warnings.append("ADDRESS_PROVIDER_FALLBACK")
     return warnings

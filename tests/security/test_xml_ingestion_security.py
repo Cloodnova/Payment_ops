@@ -62,3 +62,28 @@ def test_zero_retention_no_raw_xml_persisted(client):
     body = r.json()
     assert "<Document" not in r.text  # no raw XML echoed back
     assert body["input_hash"]
+
+
+def test_no_raw_address_in_analyze_response(client):
+    xml = load_fixture("address_adrline_only").decode()
+    r = client.post(
+        "/api/v1/payments/analyze",
+        json={"xml": xml, "persist": False, "include_candidate_xml": False},
+    )
+    assert r.status_code == 200
+    # The raw AdrLine content must not be echoed back when candidate XML is excluded.
+    assert "Main Street 10, 20121 Milano, Italy" not in r.text
+    # No IBANs in the response.
+    assert "DE89370400440532013000" not in r.text
+
+
+def test_swift_fallback_does_not_leak_address():
+    from address_engine.providers import SwiftDerivedAddressProvider
+    from payment_domain.models import PostalAddress
+
+    provider = SwiftDerivedAddressProvider(
+        "http://127.0.0.1:59999", timeout_seconds=0.2, max_retries=0
+    )
+    analysis = provider.analyze(PostalAddress(address_lines=["Via Confidenziale 7, Roma, Italy"]))
+    # The fallback analysis must not carry the raw address in its evidence.
+    assert all("Confidenziale" not in e for e in analysis.evidence)

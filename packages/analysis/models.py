@@ -24,6 +24,7 @@ class AnalysisAddress(BaseModel):
     provider: str | None = None
     provider_version: str | None = None
     note: str | None = None
+    fallback: bool = False
 
 
 class AnalysisDiff(BaseModel):
@@ -50,6 +51,7 @@ class AnalysisResult(BaseModel):
     ruleset_version: str | None = None
     address_provider: str | None = None
     address_provider_version: str | None = None
+    address_provider_fallback: bool = False
     input_hash: str | None = None
     output_hash: str | None = None
     warnings: list[str] = Field(default_factory=list)

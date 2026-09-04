@@ -39,6 +39,8 @@ class AddressAnalysis:
     # Provider availability / confidence.
     available: bool = True
     note: str | None = None
+    # Set when the primary provider was unavailable and a fallback was used.
+    fallback: bool = False
     evidence: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
@@ -56,6 +58,7 @@ class AddressAnalysis:
             "evidence_level": self.evidence_level.value,
             "available": self.available,
             "note": self.note,
+            "fallback": self.fallback,
             "evidence": self.evidence,
         }
 

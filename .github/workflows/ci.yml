@@ -179,3 +179,24 @@ jobs:
           tags: ghcr.io/cloodnova/paymentops-worker:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build & push address-structuring image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/address-structuring/Dockerfile
+          push: true
+          tags: ghcr.io/cloodnova/paymentops-address-structuring:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate SBOMs for published images
+        uses: anchore/sbom-action@v0
+        with:
+          image: |
+            ghcr.io/cloodnova/paymentops-api:${{ github.sha }}
+            ghcr.io/cloodnova/paymentops-web:${{ github.sha }}
+            ghcr.io/cloodnova/paymentops-worker:${{ github.sha }}
+            ghcr.io/cloodnova/paymentops-address-structuring:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom.syft.json

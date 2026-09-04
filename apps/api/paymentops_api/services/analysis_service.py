@@ -131,6 +131,7 @@ class AnalysisService:
             ruleset_version=result.ruleset_version,
             address_provider=result.address_provider,
             address_provider_version=result.address_provider_version,
+            address_provider_fallback=result.address_provider_fallback,
             input_hash=result.input_hash,
             output_hash=result.output_hash,
             warnings=result.warnings,

@@ -97,6 +97,14 @@ class Settings(BaseSettings):
     zero_retention_enabled: bool = True
     raw_payload_ttl_seconds: int = 0
 
+    # --- Address provider ---
+    # auto | cloudnova | swift. "auto" uses the Swift-derived provider when configured
+    # (swift_address_url set), otherwise the CloudNova deterministic provider.
+    address_provider: str = "auto"
+    swift_address_url: str = ""
+    swift_address_timeout: float = 2.0
+    swift_address_max_retries: int = 1
+
     @field_validator("cors_allowed_origins", "allowed_hosts", "ready_checks", mode="before")
     @classmethod
     def _split_comma(cls, value: object) -> object:

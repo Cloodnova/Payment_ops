@@ -9,7 +9,11 @@ from address_engine.normalization import (
     normalize_unicode,
     normalize_whitespace,
 )
-from address_engine.providers import CloudNovaAddressProvider, SwiftDerivedAddressProvider
+from address_engine.providers import (
+    CloudNovaAddressProvider,
+    FallbackAddressProvider,
+    SwiftDerivedAddressProvider,
+)
 from payment_domain.models import AddressReadiness, EvidenceLevel, PostalAddress
 
 
@@ -58,15 +62,53 @@ def test_cloudnova_provider_unresolved():
 
 
 def test_swift_provider_isolated_and_disabled():
-    provider = SwiftDerivedAddressProvider()
+    provider = SwiftDerivedAddressProvider("")  # not configured
     assert isinstance(provider, AddressProvider)
     assert provider.configured is False
     analysis = provider.analyze(PostalAddress(country="IT", town_name="Milano"))
     assert analysis.available is False
-    assert "not configured" in (analysis.note or "")
+    assert analysis.note == "ADDRESS_PROVIDER_FALLBACK"
+
+
+def test_swift_provider_unreachable_returns_fallback():
+    # No service on this URL -> transport error -> available=False.
+    provider = SwiftDerivedAddressProvider(
+        "http://127.0.0.1:59999", timeout_seconds=0.2, max_retries=0
+    )
+    analysis = provider.analyze(PostalAddress(address_lines=["Via Roma 5, Roma, Italy"]))
+    assert analysis.available is False
+    assert analysis.note == "ADDRESS_PROVIDER_FALLBACK"
+
+
+def test_swift_provider_no_address_lines():
+    provider = SwiftDerivedAddressProvider("http://127.0.0.1:59999", timeout_seconds=0.2)
+    analysis = provider.analyze(PostalAddress())
+    assert analysis.available is False
+
+
+def test_fallback_provider_uses_cloudnova_when_primary_unavailable():
+    primary = SwiftDerivedAddressProvider("")  # unavailable
+    fallback = CloudNovaAddressProvider()
+    fp = FallbackAddressProvider(primary, fallback)
+    analysis = fp.analyze(PostalAddress(country="Italy", town_name="Milano"))
+    assert analysis.available is True
+    assert analysis.fallback is True
+    assert analysis.provider == "cloudnova"
+    assert analysis.note == "ADDRESS_PROVIDER_FALLBACK"
+    assert fp.fallback_count == 1
+
+
+def test_fallback_provider_passes_through_when_primary_available():
+    primary = CloudNovaAddressProvider()
+    fp = FallbackAddressProvider(primary, CloudNovaAddressProvider())
+    analysis = fp.analyze(PostalAddress(country="IT", town_name="Milano"))
+    assert analysis.available is True
+    assert analysis.fallback is False
+    assert analysis.provider == "cloudnova"
+    assert fp.fallback_count == 0
 
 
 def test_swift_provider_not_used_by_default():
     # The default pipeline uses the CloudNova provider, never the Swift one.
     assert CloudNovaAddressProvider().name == "cloudnova"
-    assert SwiftDerivedAddressProvider().name == "swift_derived"
+    assert SwiftDerivedAddressProvider("").name == "swift_derived"

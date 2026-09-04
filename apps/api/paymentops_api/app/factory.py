@@ -15,14 +15,41 @@ from paymentops_api.middleware import (
     MetricsMiddleware,
     SecurityHeadersMiddleware,
 )
+from paymentops_api.observability import MetricAddressProvider
 from paymentops_api.routers import analyze, health, info, metrics
 from paymentops_api.settings import Settings, get_settings
 
-from address_engine.providers import CloudNovaAddressProvider
+from address_engine.base import AddressProvider
+from address_engine.providers import (
+    CloudNovaAddressProvider,
+    FallbackAddressProvider,
+    SwiftDerivedAddressProvider,
+)
 from analysis import AnalysisPipeline
 from rules_engine import build_address_ruleset
 
 logger = get_logger("paymentops.app")
+
+
+def build_address_provider(settings: Settings) -> AddressProvider:
+    """Select the address provider based on settings.
+
+    - cloudnova: deterministic provider (always available).
+    - swift: Swift-derived provider (requires the internal component).
+    - auto: Swift-derived when ``swift_address_url`` is configured, else CloudNova.
+    When the Swift provider is used, wrap it in a fallback so the request never fails.
+    """
+    use_swift = settings.address_provider == "swift" or (
+        settings.address_provider == "auto" and bool(settings.swift_address_url)
+    )
+    if use_swift:
+        swift = SwiftDerivedAddressProvider(
+            settings.swift_address_url,
+            timeout_seconds=settings.swift_address_timeout,
+            max_retries=settings.swift_address_max_retries,
+        )
+        return FallbackAddressProvider(swift, CloudNovaAddressProvider())
+    return CloudNovaAddressProvider()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -86,8 +113,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(analyze.router)
 
     # Attach the analysis pipeline (deterministic engines) so routes can use it.
+    provider = build_address_provider(settings)
+    metric_label = (
+        "swift_derived"
+        if settings.address_provider == "swift"
+        or (settings.address_provider == "auto" and bool(settings.swift_address_url))
+        else "cloudnova"
+    )
     app.state.analysis_pipeline = AnalysisPipeline(
-        address_provider=CloudNovaAddressProvider(),
+        address_provider=MetricAddressProvider(provider, label=metric_label),
         rules_engine=build_address_ruleset(),
     )
 

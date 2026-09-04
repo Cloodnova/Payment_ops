@@ -76,3 +76,32 @@ def test_analyze_does_not_expose_internals(client):
     r = client.post("/api/v1/payments/analyze", json={"xml": xml, "persist": False})
     assert "Traceback" not in r.text
     assert "Exception" not in r.text
+
+
+def test_analyze_falls_back_when_swift_provider_unreachable():
+    from fastapi.testclient import TestClient
+    from paymentops_api.app.factory import create_app
+    from paymentops_api.settings import Settings
+
+    # Point the provider at an unreachable endpoint -> Swift unavailable -> CloudNova fallback.
+    app = create_app(
+        Settings(
+            app_environment="test",
+            metrics_enabled=False,
+            ready_checks=[],
+            database_password="x",
+            address_provider="auto",
+            swift_address_url="http://127.0.0.1:59999",
+            swift_address_timeout=0.2,
+        )
+    )
+    with TestClient(app) as c:
+        xml = load_fixture("address_adrline_only").decode()
+        r = c.post("/api/v1/payments/analyze", json={"xml": xml, "repair": True, "persist": False})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["address_provider_fallback"] is True
+        assert body["address_provider"] == "cloudnova"
+        assert "ADDRESS_PROVIDER_FALLBACK" in body["warnings"]
+        # The request completes safely despite the provider being unavailable.
+        assert body["candidate_validation_status"] is not None
