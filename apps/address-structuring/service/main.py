@@ -30,7 +30,9 @@ async def health() -> dict[str, str]:
 @app.get("/ready")
 async def ready() -> dict[str, object]:
     if not _provider.ready:
-        return {"status": "not_ready", "reason": _provider.reason}
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(status_code=503, content={"status": "not_ready", "reason": _provider.reason})
     return {"status": "ready"}
 
 
