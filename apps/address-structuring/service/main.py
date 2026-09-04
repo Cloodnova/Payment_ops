@@ -8,6 +8,7 @@ It is NOT exposed publicly. Town/country inference requires the reference data m
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from service.provider import ProviderNotReadyError, SwiftStructureProvider
@@ -30,8 +31,6 @@ async def health() -> dict[str, str]:
 @app.get("/ready")
 async def ready() -> dict[str, object]:
     if not _provider.ready:
-        from fastapi.responses import JSONResponse
-
         return JSONResponse(status_code=503, content={"status": "not_ready", "reason": _provider.reason})
     return {"status": "ready"}
 
