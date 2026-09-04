@@ -193,10 +193,27 @@ jobs:
       - name: Generate SBOMs for published images
         uses: anchore/sbom-action@v0
         with:
-          image: |
-            ghcr.io/cloodnova/paymentops-api:${{ github.sha }}
-            ghcr.io/cloodnova/paymentops-web:${{ github.sha }}
-            ghcr.io/cloodnova/paymentops-worker:${{ github.sha }}
-            ghcr.io/cloodnova/paymentops-address-structuring:${{ github.sha }}
+          image: ghcr.io/cloodnova/paymentops-api:${{ github.sha }}
           format: spdx-json
-          output-file: sbom.syft.json
+          output-file: sbom-api.syft.json
+
+      - name: Generate SBOM for web image
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/cloodnova/paymentops-web:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-web.syft.json
+
+      - name: Generate SBOM for worker image
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/cloodnova/paymentops-worker:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-worker.syft.json
+
+      - name: Generate SBOM for address-structuring image
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/cloodnova/paymentops-address-structuring:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-address.syft.json
