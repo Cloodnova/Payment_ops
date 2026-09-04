@@ -41,7 +41,7 @@ RUN apt-get update \
     && addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
 COPY --from=base /opt/venv /opt/venv
-COPY --from=base --chown=appuser:appgroup /build/addr-service /srv/service
+COPY --from=base --chown=appuser:appgroup /build/addr-service/service /srv/service
 
 WORKDIR /srv
 
