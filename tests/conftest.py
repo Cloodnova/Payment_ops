@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import os
+import warnings
 
-import pytest
-from fastapi.testclient import TestClient
-from paymentops_api.app.factory import create_app
-from paymentops_api.settings import Settings
+# Third-party dependency (anyio/starlette/fastapi) emits a DeprecationWarning at import
+# time. This must be suppressed HERE, before the TestClient import below, because pytest's
+# `filterwarnings` config is not yet applied during the very early conftest import phase.
+for _module in ("anyio", "starlette", "fastapi"):
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"^" + _module)
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from paymentops_api.app.factory import create_app  # noqa: E402
+from paymentops_api.settings import Settings  # noqa: E402
 
 
 @pytest.fixture
