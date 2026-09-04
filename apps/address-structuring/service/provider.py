@@ -76,7 +76,7 @@ class SwiftStructureProvider:
 
             self._pipeline = AddressStructuringPipeline()
         except Exception as exc:  # noqa: BLE001 - provider availability is a runtime concern
-            logger.warning("swift_provider_not_ready", error_type=type(exc).__name__)
+            logger.warning("swift_provider_not_ready: %s", type(exc).__name__)
             self._pipeline = None
             self._reason = type(exc).__name__
 
