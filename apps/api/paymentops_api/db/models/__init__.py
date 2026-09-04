@@ -1,4 +1,8 @@
-"""Declarative base shared by all ORM models."""
+"""Declarative base shared by all ORM models, plus model module imports and re-exports.
+
+``Base`` must be defined before the model modules are imported (they import ``Base`` from
+this package). Importing the model modules registers all tables on ``Base.metadata``.
+"""
 
 from __future__ import annotations
 
@@ -7,3 +11,27 @@ from sqlalchemy.orm import DeclarativeBase
 
 class Base(DeclarativeBase):
     """Base class for all PaymentOps ORM models."""
+
+
+# Import model modules so their tables register on Base.metadata (used by Alembic).
+from paymentops_api.db.models import analysis as _analysis  # noqa: E402,F401
+from paymentops_api.db.models import platform as _platform  # noqa: E402,F401
+from paymentops_api.db.models.analysis import (  # noqa: E402
+    AnalysisRun,
+    AuditEvent,
+    PaymentCase,
+    RepairCandidate,
+    RuleFinding,
+)
+from paymentops_api.db.models.platform import AppMetadata, Organization  # noqa: E402
+
+__all__ = [
+    "AnalysisRun",
+    "AppMetadata",
+    "AuditEvent",
+    "Base",
+    "Organization",
+    "PaymentCase",
+    "RepairCandidate",
+    "RuleFinding",
+]

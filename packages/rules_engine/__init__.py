@@ -1,17 +1,26 @@
-"""Bank-specific rules engine boundary.
+"""CloudNova rules engine: deterministic, versioned, customer-independent.
 
-Responsibility (planned): deterministic, configuration-driven bank-specific rules. Never
-a fork per customer (ADR-008); rules are selected via integration profiles. No business
-rules implemented in Week 1.
+Rules are externalized from the API layer. No arbitrary Python execution from customer
+input; rules are code with a fixed versioned ruleset.
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from rules_engine.base import (
+    RULESET_VERSION,
+    Rule,
+    RuleEngine,
+    RuleFinding,
+    Severity,
+)
+from rules_engine.rules import ADDRESS_RULESET, build_address_ruleset
 
-
-class IRulesEngine(ABC):
-    @abstractmethod
-    def profile_id(self) -> str:
-        """Integration profile this engine instance serves."""
-        raise NotImplementedError
+__all__ = [
+    "ADDRESS_RULESET",
+    "RULESET_VERSION",
+    "Rule",
+    "RuleEngine",
+    "RuleFinding",
+    "Severity",
+    "build_address_ruleset",
+]

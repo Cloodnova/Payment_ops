@@ -60,3 +60,11 @@ def safe_client(app, monkeypatch):
 def test_database_url() -> str | None:
     """Optional real DB URL for integration tests. Tests are skipped when absent."""
     return os.environ.get("TEST_DATABASE_URL")
+
+
+def load_fixture(name: str) -> bytes:
+    """Load a synthetic pacs.008 fixture from tests/fixtures/pacs008/."""
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parent / "fixtures" / "pacs008" / f"{name}.xml"
+    return path.read_bytes()

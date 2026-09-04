@@ -6,7 +6,7 @@ export default function AppShell({
   active,
 }: {
   children: React.ReactNode;
-  active: 'dashboard' | 'status' | 'login';
+  active: 'dashboard' | 'analyze' | 'status' | 'login';
 }) {
   return (
     <div className="app-shell">
@@ -18,6 +18,9 @@ export default function AppShell({
         <nav className="app-nav" aria-label="Primary">
           <Link href="/dashboard" aria-current={active === 'dashboard' ? 'page' : undefined}>
             Dashboard
+          </Link>
+          <Link href="/analyze" aria-current={active === 'analyze' ? 'page' : undefined}>
+            Analyze
           </Link>
           <Link href="/status" aria-current={active === 'status' ? 'page' : undefined}>
             System Status

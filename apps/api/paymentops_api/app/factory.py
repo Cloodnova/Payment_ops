@@ -15,8 +15,12 @@ from paymentops_api.middleware import (
     MetricsMiddleware,
     SecurityHeadersMiddleware,
 )
-from paymentops_api.routers import health, info, metrics
+from paymentops_api.routers import analyze, health, info, metrics
 from paymentops_api.settings import Settings, get_settings
+
+from address_engine.providers import CloudNovaAddressProvider
+from analysis import AnalysisPipeline
+from rules_engine import build_address_ruleset
 
 logger = get_logger("paymentops.app")
 
@@ -79,5 +83,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(info.router)
     app.include_router(metrics.router)
+    app.include_router(analyze.router)
+
+    # Attach the analysis pipeline (deterministic engines) so routes can use it.
+    app.state.analysis_pipeline = AnalysisPipeline(
+        address_provider=CloudNovaAddressProvider(),
+        rules_engine=build_address_ruleset(),
+    )
 
     return app

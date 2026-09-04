@@ -96,13 +96,38 @@ there.
 
 ```
 apps/                api, web, worker
-packages/            shared Python packages
-schemas/             reserved (canonical/bank schemas)
+packages/            shared Python packages (payment_domain, iso_engine, rules_engine,
+                     address_engine, repair_engine, analysis, mapping_engine, ...)
+schemas/             bundled ISO 20022 subset schemas (schemas/iso20022/...)
 rules/               reserved (configuration-driven bank rules)
-tests/               unit, integration, security, fixtures
+tests/               unit, integration, security, regression, fixtures
 docs/                adr, architecture, security
 deploy/              deployment support
 ```
+
+## Week 2: analysis vertical slice
+
+The first complete production-quality slice is implemented:
+
+- `POST /api/v1/payments/analyze` — secure pacs.008 XML ingestion, XSD validation, canonical
+  mapping, deterministic rule findings, address readiness analysis, CloudNova address
+  normalization, repair candidate generation, deterministic re-validation, structured diff,
+  and hashes/audit metadata.
+- Supported version: **`pacs.008.001.08`** (see `docs/adr/ADR-011`).
+- Address providers: `CloudNovaAddressProvider` (default, deterministic) and the isolated
+  `SwiftDerivedAddressProvider` (see `docs/adr/ADR-012` and `THIRD_PARTY.md`).
+- Repair lifecycle: REPAIR_CANDIDATE -> VALIDATED_CANDIDATE (see `docs/adr/ADR-013`).
+- Zero-retention by default: `persist=false` never stores raw XML.
+
+Example:
+
+```json
+POST /api/v1/payments/analyze
+{ "xml": "<pacs.008.../>", "repair": true, "persist": false }
+```
+
+See `docs/architecture/overview.md` for the full flow and `docs/security/security-principles.md`
+for XML-security and zero-retention details.
 
 ## Kubernetes / GitOps deployment
 

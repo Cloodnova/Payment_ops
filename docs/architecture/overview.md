@@ -99,3 +99,67 @@ Full pacs.008 parsing, XSD business validation, Swift address structuring, full 
 repair, fuzzy reconciliation, the bank Integration Studio UI, AI explanation logic, payment
 execution, SWIFT connectivity, sanctions/AML decisioning, large batch processing, custom ML
 models, Kafka, and IBM MQ.
+
+## Week 2 vertical slice
+
+The first complete production-quality vertical slice:
+
+```
+pacs.008 input
+ -> secure XML ingestion (DTD/XXE disabled, size limits)
+ -> message identification (supported version)
+ -> XSD/schema validation (bundled, deterministic)
+ -> canonical PaymentMessage
+ -> deterministic rule findings (versioned ruleset)
+ -> address readiness analysis (evidence-based)
+ -> CloudNova address normalization
+ -> repair candidate generation
+ -> deterministic re-validation (XSD + rules)
+ -> structured analysis result
+ -> corrected/candidate XML + structured diff
+ -> hashes / audit metadata (zero-retention)
+```
+
+Key components (all in `packages/`):
+
+- **`iso_engine`** — secure XML parsing (`xml_security.py`), error taxonomy
+  (`xml_errors.py`), pacs.008 identification/adapter (`pacs008/`), bundled XSD validation
+  (`xsd_validator.py`).
+- **`rules_engine`** — deterministic, versioned rules (see `docs/adr/ADR-007`-style rule IDs).
+- **`address_engine`** — `AddressProvider` abstraction, deterministic normalization, and
+  evidence-based readiness classification.
+- **`repair_engine`** — candidate generation, controlled XML reconstruction, structured diff.
+- **`analysis`** — the pipeline orchestrator (`AnalysisPipeline`) and `AnalysisResult`.
+
+### Supported pacs.008 version
+
+Week 2 supports **`pacs.008.001.08`** (`urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08`),
+validated against a bundled self-contained subset XSD. See `docs/adr/ADR-011`.
+
+### Address-provider architecture
+
+PaymentOps depends only on the `AddressProvider` interface. The default is the deterministic
+`CloudNovaAddressProvider`. A `SwiftDerivedAddressProvider` isolates the Swift
+Hybrid Postal Address Structuring model as a separately-containerized component (town/country
+only). See `docs/adr/ADR-012` and `THIRD_PARTY.md`.
+
+### Repair lifecycle
+
+Outputs are **REPAIR_CANDIDATE** until deterministic validation (XSD + rules) succeeds, then
+**VALIDATED_CANDIDATE**; otherwise **REVIEW_REQUIRED** / **UNRESOLVED**. See
+`docs/adr/ADR-013`.
+
+### API
+
+- `POST /api/v1/payments/analyze` accepts a pacs.008 XML payload and returns the structured
+  analysis result. `repair` and `persist` options are supported; `persist=false` is the
+  privacy-first default (no raw XML stored).
+- `GET /health`, `GET /ready`, `GET /api/v1/info` are unchanged.
+
+### Observability
+
+Low-cardinality metrics (`paymentops_analysis_total`,
+`paymentops_analysis_duration_seconds`, `paymentops_validation_failures_total`,
+`paymentops_rule_findings_total`, `paymentops_address_resolution_total`,
+`paymentops_repair_candidates_total`) with labels limited to status/message_type/rule_category.
+

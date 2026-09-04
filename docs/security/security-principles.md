@@ -50,6 +50,26 @@ no secrets in the repo, and no leak of sensitive values into logs, errors, or me
 - Metrics use low-cardinality labels only; never label with payloads or user-controlled
   identifiers.
 
+## XML ingestion security (Week 2)
+
+- Every uploaded XML payload is untrusted.
+- Parsing uses lxml with DTD loading disabled, external entities disabled, no network access,
+  entity-expansion guard, and no huge-tree mode (see `packages/iso_engine/xml_security.py`).
+- Obvious DTD/entity markers are rejected before parsing (defence-in-depth).
+- Payload size limits are enforced (default 1 MiB).
+- Structured error taxonomy: `XML-001` malformed, `XML-002` too large, `XML-003` prohibited
+  DTD/entity, `XML-004` unsupported message type, `XML-005` encoding/parsing.
+- Raw XML is never logged; errors never echo payload content; no stack traces are exposed.
+- The XML/XSD validator is authoritative and never overridden by AI or heuristics.
+
+## Zero-retention processing
+
+- `ZERO_RETENTION_ENABLED=true` and `persist=false` (API default) means raw XML is never
+  stored in PostgreSQL.
+- Only non-sensitive metadata and SHA-256 hashes are persisted (when `persist=true`):
+  `input_hash`, `output_hash`, message type/version, rule findings, candidate status.
+- The original XML is never inserted into a table; audit stores metadata/hashes only.
+
 ## Containers
 
 - Non-root runtime where practical; drop capabilities; read-only root filesystem where

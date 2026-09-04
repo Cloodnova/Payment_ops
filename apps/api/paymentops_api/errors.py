@@ -52,6 +52,19 @@ def _correlation_id(request: Request) -> str:
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    from iso_engine.xml_errors import XmlError
+
+    @app.exception_handler(XmlError)
+    async def handle_xml_error(request: Request, exc: XmlError) -> JSONResponse:
+        cid = _correlation_id(request)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": exc.as_dict(),
+                "correlation_id": cid,
+            },
+        )
+
     @app.exception_handler(PaymentOpsError)
     async def handle_paymentops_error(request: Request, exc: PaymentOpsError) -> JSONResponse:
         cid = _correlation_id(request)

@@ -19,6 +19,7 @@ COPY pyproject.toml README.md ./
 COPY packages ./packages
 COPY apps/api ./apps/api
 COPY apps/worker ./apps/worker
+COPY schemas ./schemas
 
 # Create an isolated venv and install the package (+ runtime deps only).
 RUN python -m venv /opt/venv \
@@ -40,9 +41,13 @@ RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
 
 WORKDIR /srv/app
 
-# Copy the app code (source needed for Alembic migrations) and migrations.
+# Copy the app code (source needed for Alembic migrations), migrations, and bundled schemas.
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder --chown=appuser:appgroup /build/apps/api /srv/app
+COPY --from=builder --chown=appuser:appgroup /build/schemas /srv/app/schemas
+
+# Point the XSD validator at the bundled schemas inside the image.
+ENV PAYMENTOPS_SCHEMA_DIR=/srv/app/schemas/iso20022
 
 USER appuser
 
