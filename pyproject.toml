@@ -76,7 +76,8 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 addopts = "-ra -q --strict-markers"
 testpaths = ["tests", "apps/api/tests", "apps/worker/tests"]
-pythonpath = ["packages", "apps/api", "apps/worker"]
+# Include repo root so test modules can `from tests.conftest import ...`.
+pythonpath = [".", "packages", "apps/api", "apps/worker"]
 # Strict on our own code, but ignore DeprecationWarnings emitted by third-party
 # dependencies (anyio/starlette/fastapi) which are version-dependent and not actionable.
 filterwarnings = [
