@@ -23,5 +23,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.alter_column("audit_events", "event_type", nullable=True)
+    op.execute("ALTER TABLE audit_events ALTER COLUMN event_type DROP NOT NULL")
     op.add_column("audit_events", op.Column("event", op.String(length=64), nullable=True))
