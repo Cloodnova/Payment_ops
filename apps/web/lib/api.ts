@@ -27,6 +27,65 @@ export interface ReadinessResult {
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
+// Week 3: a bootstrap admin client for the operator UI (dev). In production the operator
+// UI would authenticate via the platform IdP.
+const ADMIN_CLIENT_ID = process.env.NEXT_PUBLIC_ADMIN_CLIENT_ID ?? '';
+const ADMIN_CLIENT_SECRET = process.env.NEXT_PUBLIC_ADMIN_CLIENT_SECRET ?? '';
+
+function authHeaders(): Record<string, string> {
+  return {
+    'X-Client-Id': ADMIN_CLIENT_ID,
+    'X-Client-Secret': ADMIN_CLIENT_SECRET,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+}
+
+export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { ...authHeaders(), ...(init?.headers ?? {}) },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.detail ?? `Request failed (${res.status})`);
+  }
+  return (await res.json()) as T;
+}
+
+export interface Profile {
+  id?: string;
+  name: string;
+  description?: string;
+  status?: string;
+  input_format: string;
+  version_number?: number;
+}
+
+export function listProfiles() {
+  return apiJson<Profile[]>('/api/v1/integration-profiles');
+}
+
+export function createProfile(p: Profile) {
+  return apiJson<Profile>('/api/v1/integration-profiles', { method: 'POST', body: JSON.stringify(p) });
+}
+
+export function publishProfile(id: string) {
+  return apiJson<{ published: boolean }>(`/api/v1/integration-profiles/${id}/publish`, { method: 'POST' });
+}
+
+export interface CaseSummary {
+  case_id: string;
+  status: string;
+  message_type?: string;
+  address_readiness?: string;
+  repair_status?: string;
+}
+
+export function listCases() {
+  return apiJson<CaseSummary[]>('/api/v1/cases?limit=50');
+}
+
 async function safeJson<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${API_BASE}${path}`, {

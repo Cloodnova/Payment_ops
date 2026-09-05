@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paymentops_api.auth import AuthenticatedClient, get_api_client, get_db
+from paymentops_api.db.models import PaymentCase
 from paymentops_api.services import case_service
 
 router = APIRouter(tags=["cases"])
@@ -16,6 +18,32 @@ class CaseActionRequest(BaseModel):
     action: str = Field(..., description="approve | reject | close")
     operator: str | None = None
     note: str | None = None
+
+
+@router.get("/api/v1/cases")
+async def list_cases(
+    limit: int = Query(50, le=200),
+    client: AuthenticatedClient = Depends(get_api_client),
+    session: AsyncSession = Depends(get_db),
+) -> list[dict[str, object]]:
+    result = await session.execute(
+        select(PaymentCase)
+        .where(PaymentCase.organization_id == client.organization_id)
+        .order_by(PaymentCase.created_at.desc())
+        .limit(limit)
+    )
+    return [
+        {
+            "case_id": c.case_id,
+            "status": c.status,
+            "message_type": c.message_type,
+            "validation_status": c.validation_status,
+            "address_readiness": c.address_readiness,
+            "repair_status": c.repair_status,
+            "address_provider_coverage": c.address_provider_coverage,
+        }
+        for c in result.scalars().all()
+    ]
 
 
 @router.get("/api/v1/cases/{case_id}")
