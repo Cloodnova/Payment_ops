@@ -129,6 +129,33 @@ POST /api/v1/payments/analyze
 See `docs/architecture/overview.md` for the full flow and `docs/security/security-principles.md`
 for XML-security and zero-retention details.
 
+## Week 3: multi-customer platform
+
+Week 3 turns the engine into a configurable multi-customer payment-data platform:
+
+- **Integration Profiles** — declarative, versioned mapping + rules per customer/input format
+  (JSON, custom XML, CSV, ISO 20022 pacs.008). Published profiles are immutable; changes create
+  a new draft version (see `docs/adr/ADR-015`).
+- **Mapping engine** — controlled JSONPath/XPath/CSV selectors + a safe transform library into
+  the canonical `PaymentMessage`. No arbitrary code execution.
+- **Customer-specific rules** — declarative config rules over CloudNova baseline rules
+  (baseline → org → profile hierarchy).
+- **API client auth** — client_id + salted secret hash, org-scoped, maps to OAuth2/mTLS later.
+- **Batch processing** — CSV upload → Celery/worker → aggregated readiness report (streaming,
+  defensive limits).
+- **Case/operator workflow** — human review with approve/reject/close. Approval approves the
+  data-repair candidate only; it does not authorize or execute payments.
+- **Tenant isolation** — every profile/version/case/batch/audit is scoped to `organization_id`.
+- **Address coverage** — explicit `SUPPORTED` / `UNSUPPORTED_GEOGRAPHY` / `UNKNOWN` metadata
+  (dev corpus covers IT/IN/SA/GB/DE/FR/ES/NL only).
+
+Example:
+
+```json
+POST /api/v1/integration-profiles/<id>/publish
+POST /api/v1/integrations/<profile_id>/analyze   (X-Client-Id / X-Client-Secret headers)
+```
+
 ## Kubernetes / GitOps deployment
 
 Deployment targets a Kubernetes cluster managed by **Flux GitOps**, reusing the existing
