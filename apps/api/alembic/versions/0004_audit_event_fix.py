@@ -7,6 +7,7 @@ Create Date: 2026-09-05
 from __future__ import annotations
 
 from alembic import op
+import sqlalchemy as sa
 
 revision = "0004_audit_event_fix"
 down_revision = "0003_week3"
@@ -24,4 +25,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("ALTER TABLE audit_events ALTER COLUMN event_type DROP NOT NULL")
-    op.add_column("audit_events", op.Column("event", op.String(length=64), nullable=True))
+    op.add_column("audit_events", sa.Column("event", sa.String(length=64), nullable=True))
