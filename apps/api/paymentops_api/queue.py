@@ -14,11 +14,13 @@ from paymentops_api.settings import Settings, get_settings
 @lru_cache
 def _celery_client() -> Celery:
     s = get_settings()
-    return Celery(
+    app = Celery(
         "paymentops_api_client",
         broker=s.celery_broker_url,
         backend=s.celery_result_backend,
     )
+    app.conf.update(task_default_queue="paymentops")
+    return app
 
 
 def enqueue_process_batch(job_id: str, redis_key: str) -> str:
