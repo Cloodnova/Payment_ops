@@ -39,6 +39,7 @@ class AnalysisService:
         request: AnalyzeRequest,
         *,
         session: AsyncSession | None = None,
+        organization_id: str | None = None,
     ) -> AnalyzeResponse:
         start = time.perf_counter()
         payload = request.xml.encode("utf-8")
@@ -68,15 +69,23 @@ class AnalysisService:
 
         # --- Persistence (metadata + hashes only; never raw XML) ---
         if request.persist and session is not None:
-            await self._persist(session, result, duration_ms=int(duration_s * 1000))
+            await self._persist(
+                session, result, duration_ms=int(duration_s * 1000), organization_id=organization_id
+            )
 
         return self._to_response(result)
 
     async def _persist(
-        self, session: AsyncSession, result: AnalysisResult, *, duration_ms: int
+        self,
+        session: AsyncSession,
+        result: AnalysisResult,
+        *,
+        duration_ms: int,
+        organization_id: str | None = None,
     ) -> None:
         case = PaymentCase(
             case_id=result.case_id,
+            organization_id=organization_id,
             message_type=result.message_type,
             message_version=result.message_version,
             validation_status=result.original_validation_status,

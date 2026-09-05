@@ -82,3 +82,21 @@ async def get_api_client(
         allowed_profiles=client.allowed_profiles or [],
         client_id_guid=str(client.id),
     )
+
+
+async def get_optional_api_client(
+    x_client_id: str | None = Header(default=None, alias="X-Client-Id"),
+    x_client_secret: str | None = Header(default=None, alias="X-Client-Secret"),
+    session: AsyncSession = Depends(get_db),
+) -> AuthenticatedClient | None:
+    """Return an authenticated client, or ``None`` if no credentials were supplied.
+
+    If credentials ARE supplied but invalid, raise 401/403 (never silently ignore them).
+    """
+    if not x_client_id or not x_client_secret:
+        return None
+    return await get_api_client(
+        x_client_id=x_client_id,
+        x_client_secret=x_client_secret,
+        session=session,
+    )

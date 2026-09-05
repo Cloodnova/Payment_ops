@@ -1,17 +1,21 @@
-"""POST /api/v1/payments/analyze.
+"""POST /api/v1/payments/analyze (LEGACY / development-only).
 
-Accepts an untrusted pacs.008 XML payload, runs the deterministic analysis pipeline, and
-returns a structured result. Raw XML is never persisted unless ``persist=true`` (metadata +
-hashes only). Never exposes internal exception details.
+This endpoint predates Integration Profiles. It is retained for development/demo and is
+DISABLED in production. When ``persist=true`` it requires an authenticated API client so any
+created case is tenant-scoped; it can no longer create unscoped production data.
+
+The production path is the authenticated, profile-resolved endpoint
+``POST /api/v1/integrations/{profile_id}/analyze``.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from paymentops_api.auth import AuthenticatedClient, get_optional_api_client
 from paymentops_api.db.base import Database
 from paymentops_api.schemas.analysis import AnalyzeRequest, AnalyzeResponse
 from paymentops_api.services.analysis_service import AnalysisService
@@ -35,7 +39,24 @@ async def analyze_payment(
     request: Request,
     service: AnalysisService = Depends(get_analysis_service),
     session: AsyncSession = Depends(get_session),
+    client: AuthenticatedClient | None = Depends(get_optional_api_client),
 ) -> AnalyzeResponse:
-    # ``persist`` is request-controlled; default is false (privacy-first). The session is
-    # only used when persist is true; persist=false never touches the database.
-    return await service.analyze(payload, session=session if payload.persist else None)
+    settings = request.app.state.settings
+    if settings.is_production:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Legacy analysis endpoint is disabled in production",
+        )
+
+    # Persisting requires an authenticated, tenant-scoped client.
+    if payload.persist and client is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required to persist analysis",
+        )
+
+    return await service.analyze(
+        payload,
+        session=session if payload.persist else None,
+        organization_id=client.organization_id if client else None,
+    )

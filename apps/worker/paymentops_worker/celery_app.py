@@ -36,6 +36,10 @@ def build_celery(broker_url: str, result_backend: str) -> Celery:
     )
     app.task(name="paymentops.health")(health_task)
     app.task(name="paymentops.smoke")(smoke_task)
+    # Async batch processing task (imported lazily to avoid heavy imports at module load).
+    from paymentops_worker.batch_tasks import process_batch
+
+    app.task(name="paymentops.process_batch")(process_batch)
     return app
 
 
