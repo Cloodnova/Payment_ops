@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from integration_profiles.models import IntegrationProfile
 from paymentops_api.auth import AuthenticatedClient, get_api_client, get_db
-from paymentops_api.db.models import PaymentCase
+from paymentops_api.db.models import AuditEvent, PaymentCase, RepairCandidate, RuleFinding
 from paymentops_api.services import integration_service
 from paymentops_api.services.integration_analysis_service import analyze_profile
 
@@ -96,6 +96,28 @@ async def _persist_case(
         created_at=datetime.now(UTC),
     )
     session.add(case)
+    for finding in cast(list[dict[str, object]], result.get("rule_findings") or []):
+        session.add(
+            RuleFinding(
+                organization_id=org,
+                case_id=case.case_id,
+                rule_id=str(finding.get("rule_id", "unknown")),
+                severity=str(finding.get("severity", "unknown")),
+                target=str(finding.get("target", ""))[:256],
+                message=str(finding.get("message", ""))[:256],
+            )
+        )
+    if result.get("candidate_validation_status"):
+        session.add(
+            RepairCandidate(
+                organization_id=org,
+                case_id=case.case_id,
+                candidate_id=f"RC-{case.case_id}",
+                status=str(result.get("candidate_validation_status")),
+                xml_sha256=cast("str | None", result.get("output_hash")),
+            )
+        )
+    session.add(AuditEvent(case_id=case.case_id, event_type="analysis_completed"))
     await session.commit()
     await session.refresh(case)
     return case
