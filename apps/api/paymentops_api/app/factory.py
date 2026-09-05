@@ -16,7 +16,17 @@ from paymentops_api.middleware import (
     SecurityHeadersMiddleware,
 )
 from paymentops_api.observability import MetricAddressProvider
-from paymentops_api.routers import analyze, health, info, metrics
+from paymentops_api.routers import (
+    analyze,
+    batches,
+    cases,
+    clients,
+    health,
+    info,
+    integrations,
+    metrics,
+    profiles,
+)
 from paymentops_api.settings import Settings, get_settings
 
 from address_engine.base import AddressProvider
@@ -111,6 +121,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(info.router)
     app.include_router(metrics.router)
     app.include_router(analyze.router)
+    app.include_router(profiles.router)
+    app.include_router(integrations.router)
+    app.include_router(clients.router)
+    app.include_router(cases.router)
+    app.include_router(batches.router)
 
     # Attach the analysis pipeline (deterministic engines) so routes can use it.
     provider = build_address_provider(settings)

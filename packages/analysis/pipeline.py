@@ -24,9 +24,9 @@ from analysis.models import (
 )
 from iso_engine.pacs008.adapter import map_pacs008_to_canonical
 from iso_engine.pacs008.identifier import identify_pacs008
-from iso_engine.xml_security import secure_parse
-from iso_engine.xsd_validator import validate_pacs008
-from payment_domain.models import AddressReadiness, ValidationStatus
+from iso_engine.xml_security import SecureXmlDocument, secure_parse
+from iso_engine.xsd_validator import SchemaValidationResult, validate_pacs008
+from payment_domain.models import AddressReadiness, PaymentMessage, ValidationStatus
 from repair_engine.generator import addresses, generate_candidate
 from repair_engine.models import RepairCandidate
 from rules_engine.base import RuleEngine
@@ -51,27 +51,46 @@ class AnalysisPipeline:
         repair: bool = True,
         include_candidate_xml: bool = False,
     ) -> AnalysisResult:
-        case_id = f"case-{uuid4().hex[:16]}"
-
-        # 1. Secure ingestion (raises structured XmlError on failure).
+        """Analyze a pacs.008 XML payload (existing entry point)."""
         doc = secure_parse(payload, max_bytes=self._max_payload_bytes)
-
-        # 2. Identify the supported version.
         version = identify_pacs008(doc.root)
-
-        # 3. Authoritative XSD validation of the ORIGINAL.
         xsd_result = validate_pacs008(doc.root, version)
-
-        # 4. Map to the canonical model (best-effort; tolerant of some schema issues).
         message = map_pacs008_to_canonical(doc.root, version)
         message.validation_status = (
             ValidationStatus.VALID if xsd_result.valid else ValidationStatus.INVALID
         )
+        return self.analyze_message(
+            message,
+            doc=doc,
+            xsd_result=xsd_result,
+            message_type=version.identifier,
+            message_version=version.identifier,
+            repair=repair,
+            include_candidate_xml=include_candidate_xml,
+        )
 
-        # 5. Deterministic rule findings.
+    def analyze_message(
+        self,
+        message: PaymentMessage,
+        *,
+        doc: SecureXmlDocument | None = None,
+        xsd_result: SchemaValidationResult | None = None,
+        message_type: str | None = None,
+        message_version: str | None = None,
+        repair: bool = True,
+        include_candidate_xml: bool = False,
+    ) -> AnalysisResult:
+        """Run the deterministic engine on an already-mapped canonical ``PaymentMessage``.
+
+        Used by the mapping engine for JSON/CSV/custom-XML inputs. ``doc``/``xsd_result`` are
+        provided when the source is ISO XML (pacs.008) so XML reconstruction + XSD revalidation
+        can run; otherwise the candidate is re-validated against the rules on the model.
+        """
+        case_id = f"case-{uuid4().hex[:16]}"
+        xsd_valid = xsd_result.valid if xsd_result else True
+
         findings = self._rules_engine.evaluate(message)
 
-        # 6. Address analysis (per party/agent address).
         address_analyses: list[AnalysisAddress] = []
         overall_readiness: list[AddressReadiness] = []
         any_fallback = False
@@ -100,7 +119,6 @@ class AnalysisPipeline:
                     )
                 )
 
-        # 7. Repair candidate generation (if requested).
         candidate: RepairCandidate | None = None
         if repair:
             candidate = generate_candidate(
@@ -110,7 +128,7 @@ class AnalysisPipeline:
                 rules_engine=self._rules_engine,
             )
 
-        input_hash = sha256(payload).hexdigest()
+        input_hash = _message_hash(message)
         output_hash = (
             sha256(candidate.xml.encode("utf-8")).hexdigest()
             if candidate and candidate.xml
@@ -119,17 +137,12 @@ class AnalysisPipeline:
 
         return AnalysisResult(
             case_id=case_id,
-            message_type=version.identifier,
-            message_version=version.identifier,
-            original_validation_status="valid" if xsd_result.valid else "invalid",
+            message_type=message_type or message.message_type,
+            message_version=message_version,
+            original_validation_status="valid" if xsd_valid else "invalid",
             schema_issues=[
-                AnalysisIssue(
-                    code=i.code,
-                    severity=i.severity,
-                    path=i.path,
-                    message=i.message,
-                )
-                for i in xsd_result.issues
+                AnalysisIssue(code=i.code, severity=i.severity, path=i.path, message=i.message)
+                for i in (xsd_result.issues if xsd_result else [])
             ],
             rule_findings=[f.to_dict() for f in findings],
             address_analyses=address_analyses,
@@ -155,8 +168,13 @@ class AnalysisPipeline:
             address_provider_fallback=any_fallback,
             input_hash=input_hash,
             output_hash=output_hash,
-            warnings=_warnings(xsd_result.valid, candidate, any_fallback),
+            warnings=_warnings(xsd_valid, candidate, any_fallback),
         )
+
+
+def _message_hash(message: PaymentMessage) -> str:
+    """Deterministic hash of a canonical message (used when no raw payload is hashed)."""
+    return sha256(message.model_dump_json(exclude_none=True).encode("utf-8")).hexdigest()
 
 
 def _aggregate_readiness(levels: list[AddressReadiness]) -> str:

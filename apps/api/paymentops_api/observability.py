@@ -66,6 +66,38 @@ address_provider_duration = Histogram(
     ("provider",),
 )
 
+# Week 3 metrics (low-cardinality labels: status/format/category only).
+profile_analysis_total = Counter(
+    "paymentops_profile_analysis_total",
+    "Profile-resolved analyses",
+    ("status", "format"),
+)
+mapping_failures_total = Counter(
+    "paymentops_mapping_failures_total",
+    "Mapping failures",
+    ("category",),
+)
+batch_jobs_total = Counter(
+    "paymentops_batch_jobs_total",
+    "Batch jobs",
+    ("status",),
+)
+batch_records_total = Counter(
+    "paymentops_batch_records_total",
+    "Batch records processed",
+    ("status",),
+)
+cases_total = Counter(
+    "paymentops_cases_total",
+    "PaymentOps cases",
+    ("status",),
+)
+case_actions_total = Counter(
+    "paymentops_case_actions_total",
+    "Case actions",
+    ("action",),
+)
+
 
 class MetricAddressProvider(AddressProvider):
     """Wraps an :class:`AddressProvider`, recording low-cardinality metrics per request.

@@ -10,6 +10,7 @@ We never present a candidate as a "corrected payment" until deterministic valida
 
 from __future__ import annotations
 
+from copy import deepcopy
 from uuid import uuid4
 
 from address_engine.base import AddressProvider
@@ -43,12 +44,17 @@ def addresses(transaction: PaymentTransaction) -> list[tuple[str, PostalAddress]
 
 def generate_candidate(
     message: PaymentMessage,
-    doc: SecureXmlDocument,
+    doc: SecureXmlDocument | None,
     *,
     address_provider: AddressProvider,
     rules_engine: RuleEngine,
 ) -> RepairCandidate:
-    """Generate, reconstruct, and deterministically re-validate a repair candidate."""
+    """Generate, reconstruct, and deterministically re-validate a repair candidate.
+
+    ``doc`` is the secure XML tree for XML sources (pacs.008). For non-XML sources (mapped
+    JSON/CSV/custom XML) ``doc`` is ``None``; the candidate is re-validated against the rules
+    on the canonical model instead of the XML/XSD.
+    """
 
     changes: list[DiffEntry] = []
     for tx in message.transactions:
@@ -57,9 +63,8 @@ def generate_candidate(
                 continue
             analysis = address_provider.analyze(addr)
             base = addr.source_path
-            raw_country = addr.original_fields.get("Ctry")
-            raw_town = addr.original_fields.get("TwnNm")
-            # Propose a change only when the deterministic candidate differs from the source.
+            raw_country = addr.original_fields.get("Ctry") or addr.country
+            raw_town = addr.original_fields.get("TwnNm") or addr.town_name
             if analysis.country_code and raw_country != analysis.country_code:
                 changes.append(
                     DiffEntry(
@@ -90,33 +95,71 @@ def generate_candidate(
             note="No repair changes required",
         )
 
-    # Reconstruct the candidate XML from the original tree (never mutating the original).
-    new_root, applied = apply_changes(doc.root, changes)
-    candidate_xml = serialize(new_root)
+    if doc is not None:
+        # Reconstruct the candidate XML from the original tree (never mutating the original).
+        new_root, applied = apply_changes(doc.root, changes)
+        candidate_xml = serialize(new_root)
+        version = identify_pacs008(new_root)
+        xsd_result = validate_pacs008(new_root, version)
+        from iso_engine.pacs008.adapter import map_pacs008_to_canonical
 
-    # Deterministic re-validation.
-    version = identify_pacs008(new_root)
-    xsd_result = validate_pacs008(new_root, version)
-    # Re-validate rules on the canonical form derived from the candidate.
-    # (We re-map to a fresh canonical message so rule findings reflect the candidate.)
-    from iso_engine.pacs008.adapter import map_pacs008_to_canonical
+        candidate_message = map_pacs008_to_canonical(new_root, version)
+        candidate_findings = rules_engine.evaluate(candidate_message)
+        if xsd_result.valid and not _blocking_findings(candidate_findings):
+            status = CandidateStatus.VALIDATED
+        else:
+            status = CandidateStatus.REVIEW_REQUIRED
+        return RepairCandidate(
+            candidate_id=candidate_id,
+            changes=applied,
+            xml=candidate_xml,
+            status=status,
+            xsd_result=xsd_result,
+            rule_findings=candidate_findings,
+        )
 
-    candidate_message = map_pacs008_to_canonical(new_root, version)
+    # Non-XML source: apply the address changes to the canonical model and re-run rules.
+    candidate_message = _apply_to_message(message, changes)
     candidate_findings = rules_engine.evaluate(candidate_message)
-
-    if xsd_result.valid and not _blocking_findings(candidate_findings):
-        status = CandidateStatus.VALIDATED
-    else:
+    if _blocking_findings(candidate_findings):
         status = CandidateStatus.REVIEW_REQUIRED
-
+    else:
+        status = CandidateStatus.VALIDATED
     return RepairCandidate(
         candidate_id=candidate_id,
-        changes=applied,
-        xml=candidate_xml,
+        changes=changes,
+        xml=None,
         status=status,
-        xsd_result=xsd_result,
         rule_findings=candidate_findings,
     )
+
+
+def _apply_to_message(message: PaymentMessage, changes: list[DiffEntry]) -> PaymentMessage:
+    """Apply address-field changes to a deep copy of the canonical message (no XML)."""
+    updated = deepcopy(message)
+    for change in changes:
+        segments = [s for s in change.path.split("/") if s]
+        if len(segments) < 4:
+            continue
+        try:
+            tx_index = int(segments[1].strip("[]"))
+        except ValueError:
+            continue
+        tx = updated.transactions[tx_index]
+        party_name = segments[2]
+        addr = None
+        if party_name == "Cdtr" and tx.creditor and tx.creditor.postal_address:
+            addr = tx.creditor.postal_address
+        elif party_name == "Dbtr" and tx.debtor and tx.debtor.postal_address:
+            addr = tx.debtor.postal_address
+        if addr is None:
+            continue
+        field = segments[-1]
+        if field == "Ctry" and change.after:
+            addr.country = change.after
+        elif field == "TwnNm" and change.after:
+            addr.town_name = change.after
+    return updated
 
 
 def _blocking_findings(findings: list[RuleFinding]) -> bool:

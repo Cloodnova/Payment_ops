@@ -10,8 +10,8 @@ import uuid
 from datetime import UTC, datetime
 
 from paymentops_api.db.models import Base
-from sqlalchemy import DateTime, Integer, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -26,16 +26,25 @@ class PaymentCase(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     case_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=True, index=True
+    )
     message_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     message_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     validation_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     address_readiness: Mapped[str | None] = mapped_column(String(32), nullable=True)
     repair_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     ruleset_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mapping_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    integration_profile_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    engine_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     address_provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
     address_provider_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    address_provider_coverage: Mapped[str | None] = mapped_column(String(32), nullable=True)
     input_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     output_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="NEW")
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -47,6 +56,9 @@ class AnalysisRun(Base):
     __tablename__ = "analysis_runs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     case_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -61,6 +73,9 @@ class RuleFinding(Base):
     __tablename__ = "rule_findings"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     case_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     rule_id: Mapped[str] = mapped_column(String(32), nullable=False)
     severity: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -74,6 +89,9 @@ class RepairCandidate(Base):
     __tablename__ = "repair_candidates"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     case_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     candidate_id: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -89,8 +107,19 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     case_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    event: Mapped[str] = mapped_column(String(64), nullable=False)
+    profile_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    profile_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mapping_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ruleset_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_identity: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    input_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    output_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    action_metadata: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )

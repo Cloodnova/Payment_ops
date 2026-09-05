@@ -52,6 +52,7 @@ class AnalysisResult(BaseModel):
     address_provider: str | None = None
     address_provider_version: str | None = None
     address_provider_fallback: bool = False
+    address_provider_coverage: str | None = None
     input_hash: str | None = None
     output_hash: str | None = None
     warnings: list[str] = Field(default_factory=list)
