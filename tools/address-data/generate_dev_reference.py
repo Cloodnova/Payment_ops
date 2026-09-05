@@ -10,10 +10,10 @@ Usage (run in the address-structuring image, which has polars + orjson):
 
 No upstream algorithms are modified. No secrets. Deterministic.
 """
+
 from __future__ import annotations
 
 import argparse
-import json
 import zlib
 from pathlib import Path
 
