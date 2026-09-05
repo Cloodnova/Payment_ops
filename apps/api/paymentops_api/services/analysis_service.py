@@ -85,6 +85,7 @@ class AnalysisService:
             ruleset_version=result.ruleset_version,
             address_provider=result.address_provider,
             address_provider_version=result.address_provider_version,
+            address_provider_coverage=result.address_provider_coverage,
             input_hash=result.input_hash,
             output_hash=result.output_hash,
         )
@@ -111,7 +112,7 @@ class AnalysisService:
                     xml_sha256=result.output_hash,
                 )
             )
-        session.add(AuditEvent(case_id=result.case_id, event="analysis_completed"))
+        session.add(AuditEvent(case_id=result.case_id, event_type="analysis_completed"))
         await session.commit()
 
     def _to_response(self, result: AnalysisResult) -> AnalyzeResponse:
