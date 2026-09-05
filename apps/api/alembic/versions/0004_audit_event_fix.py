@@ -4,6 +4,7 @@ Revision ID: 0004_audit_event_fix
 Revises: 0003_week3
 Create Date: 2026-09-05
 """
+
 from __future__ import annotations
 
 from alembic import op
