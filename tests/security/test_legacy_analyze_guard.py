@@ -1,4 +1,5 @@
 """Security tests for the legacy /analyze endpoint tenant behavior."""
+
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
