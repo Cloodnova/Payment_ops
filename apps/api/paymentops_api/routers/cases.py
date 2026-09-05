@@ -56,21 +56,54 @@ async def get_case(
         case = await case_service.get_case(session, client.organization_id, case_id)
     except LookupError:
         raise HTTPException(status_code=404, detail="case not found") from None
+    findings = await _rule_findings(session, case_id)
+    audit = await _audit_events(session, case_id)
     return {
         "case_id": case.case_id,
         "organization_id": str(case.organization_id),
         "message_type": case.message_type,
+        "message_version": case.message_version,
         "validation_status": case.validation_status,
         "address_readiness": case.address_readiness,
         "repair_status": case.repair_status,
         "status": case.status,
         "address_provider": case.address_provider,
         "address_provider_coverage": case.address_provider_coverage,
+        "ruleset_version": case.ruleset_version,
+        "mapping_version": case.mapping_version,
+        "integration_profile_version": case.integration_profile_version,
         "input_hash": case.input_hash,
         "output_hash": case.output_hash,
-        "disclaimer": "Approval in PaymentOps approves the data-repair candidate only. "
-        "PaymentOps does not authorize or execute payments.",
+        "findings": findings,
+        "audit": audit,
+        "disclaimer": "Approval in PaymentOps approves the data-repair candidate only. It does not authorize, release, settle, or execute the payment.",
     }
+
+
+async def _rule_findings(session: AsyncSession, case_id: str) -> list[dict[str, object]]:
+    from paymentops_api.db.models import RuleFinding
+
+    result = await session.execute(select(RuleFinding).where(RuleFinding.case_id == case_id))
+    return [
+        {"rule_id": r.rule_id, "severity": r.severity, "target": r.target, "message": r.message}
+        for r in result.scalars().all()
+    ]
+
+
+async def _audit_events(session: AsyncSession, case_id: str) -> list[dict[str, object]]:
+    from paymentops_api.db.models import AuditEvent
+
+    result = await session.execute(
+        select(AuditEvent).where(AuditEvent.case_id == case_id).order_by(AuditEvent.created_at)
+    )
+    return [
+        {
+            "timestamp": e.created_at.isoformat() if e.created_at else None,
+            "actor": e.user_identity,
+            "event": e.event_type,
+        }
+        for e in result.scalars().all()
+    ]
 
 
 @router.post("/api/v1/cases/{case_id}/actions")
