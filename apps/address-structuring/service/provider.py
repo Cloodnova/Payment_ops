@@ -61,6 +61,11 @@ class SwiftStructureProvider:
         self._reason: str | None = None
         self._try_init()
 
+    def _ensure_ready(self) -> None:
+        """Retry initialization if not ready (handles transient startup timing)."""
+        if self._pipeline is None:
+            self._try_init()
+
     def _try_init(self) -> None:
         try:
             import os
@@ -84,6 +89,7 @@ class SwiftStructureProvider:
 
     @property
     def ready(self) -> bool:
+        self._ensure_ready()
         return self._pipeline is not None
 
     @property
@@ -93,6 +99,7 @@ class SwiftStructureProvider:
     def structure(
         self, text: str, *, suggested_country: str | None = None, force: bool = False
     ) -> StructureResult:
+        self._ensure_ready()
         if self._pipeline is None:
             raise ProviderNotReadyError(self._reason or "provider not initialised")
 
