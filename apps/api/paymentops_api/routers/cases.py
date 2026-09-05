@@ -76,7 +76,10 @@ async def get_case(
         "output_hash": case.output_hash,
         "findings": findings,
         "audit": audit,
-        "disclaimer": "Approval in PaymentOps approves the data-repair candidate only. It does not authorize, release, settle, or execute the payment.",
+        "disclaimer": (
+            "Approval in PaymentOps approves the data-repair candidate only. It does not "
+            "authorize, release, settle, or execute the payment."
+        ),
     }
 
 
