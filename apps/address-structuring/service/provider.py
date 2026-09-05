@@ -66,11 +66,13 @@ class SwiftStructureProvider:
             import os
 
             os.environ["DS_PREFIX_FOLDER_PATH"] = str(self._resources_dir)
-            # Model paths (relative to prefix).
-            os.environ.setdefault(
-                "DS_MODEL_WEIGHTS_PATH", "models/CRF_with_MLP_EPOCH_1.safetensors"
+            # CRFConfig does NOT prepend the prefix, so model paths must be absolute.
+            os.environ["DS_MODEL_WEIGHTS_PATH"] = str(
+                self._resources_dir / "models" / "CRF_with_MLP_EPOCH_1.safetensors"
             )
-            os.environ.setdefault("DS_MODEL_CONFIG_PATH", "models/CRF_with_MLP_EPOCH_1.config.json")
+            os.environ["DS_MODEL_CONFIG_PATH"] = str(
+                self._resources_dir / "models" / "CRF_with_MLP_EPOCH_1.config.json"
+            )
 
             from data_structuring.pipeline import AddressStructuringPipeline
 
