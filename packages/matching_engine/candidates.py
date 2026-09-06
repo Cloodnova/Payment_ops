@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Any
 
 from matching_engine.models import MatchingPolicy, MatchRecord
+from matching_engine.normalization import normalize_reference
 
 # Hard bounds (development baseline). Never unbounded candidate sets.
 DEFAULT_MAX_CANDIDATES = 20
@@ -61,7 +62,8 @@ def narrowing_criteria(
 
     ref = record.remittance_reference or record.external_reference
     if ref:
-        crit["reference_prefix"] = ref[:8]
+        norm = normalize_reference(ref)
+        crit["reference_prefix"] = norm[:8] if norm else None
 
     account = record.debtor_account or record.creditor_account
     if account:

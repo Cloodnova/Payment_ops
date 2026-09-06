@@ -30,6 +30,7 @@ from matching_engine import (
     narrowing_criteria,
 )
 from matching_engine.candidates import DEFAULT_MAX_CANDIDATES
+from matching_engine.normalization import normalize_reference
 
 ENGINE_VERSION = "0.2.0"
 
@@ -284,21 +285,8 @@ async def candidate_records(
             date_conds.append(col.between(start, end))
         if date_conds:
             stmt = stmt.where(or_(*date_conds))
-    if crit.get("reference_prefix"):
-        stmt = stmt.where(
-            or_(
-                MatchRecordRow.remittance_reference.ilike(f"{crit['reference_prefix']}%"),
-                MatchRecordRow.external_reference.ilike(f"{crit['reference_prefix']}%"),
-            )
-        )
-    if crit.get("account"):
-        acc = str(crit["account"]).replace(" ", "").replace("-", "").upper()
-        stmt = stmt.where(
-            or_(
-                MatchRecordRow.debtor_account == acc,
-                MatchRecordRow.creditor_account == acc,
-            )
-        )
+    # Reference/account narrowing is done in-memory (normalization-aware), not in SQL,
+    # because references/accounts may differ in formatting (hyphens/spaces/case).
     stmt = stmt.limit(max_candidates)
     result = await session.execute(stmt)
     return list(result.scalars().all())
@@ -328,14 +316,14 @@ async def search_candidates(
     max_candidates: int = DEFAULT_MAX_CANDIDATES,
 ) -> list[CandidateMatch]:
     source_row = await _ensure_record(session, org, source)
-    candidates = await candidate_records(
+    rows = await candidate_records(
         session, org, source_row, policy, max_candidates=max_candidates, exclude_id=source.record_id
     )
+    # Apply normalization-aware reference/account narrowing in-memory.
+    narrowed = _filter_candidates(source, [_row_to_domain(r) for r in rows], policy, max_candidates)
     ranked: list[CandidateMatch] = []
-    for cand in candidates:
-        decision = evaluate_pair(
-            source, _row_to_domain(cand), policy, engine_version=ENGINE_VERSION
-        )
+    for cand in narrowed:
+        decision = evaluate_pair(source, cand, policy, engine_version=ENGINE_VERSION)
         if decision.match_score <= 0:
             continue
         ranked.append(
@@ -529,9 +517,10 @@ def _candidate_matches(cand: MatchRecord, crit: dict[str, Any]) -> bool:
         if not within:
             return False
     if crit.get("reference_prefix"):
-        prefix = str(crit["reference_prefix"]).upper()
+        prefix = str(crit["reference_prefix"])
         ref = cand.remittance_reference or cand.external_reference or ""
-        if ref.upper().replace(" ", "").replace("-", "")[:8] != prefix[:8]:
+        norm = normalize_reference(ref)
+        if norm is None or norm[:8] != prefix:
             return False
     if crit.get("account"):
         acc = str(crit["account"]).replace(" ", "").replace("-", "").upper()
