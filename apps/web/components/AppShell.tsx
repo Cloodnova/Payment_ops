@@ -6,7 +6,7 @@ export default function AppShell({
   active,
 }: {
   children: React.ReactNode;
-  active: 'dashboard' | 'analyze' | 'profiles' | 'batches' | 'cases' | 'status' | 'login';
+  active: 'dashboard' | 'analyze' | 'profiles' | 'batches' | 'cases' | 'matching' | 'reconciliation' | 'status' | 'login';
 }) {
   return (
     <div className="app-shell">
@@ -30,6 +30,12 @@ export default function AppShell({
           </Link>
           <Link href="/cases" aria-current={active === 'cases' ? 'page' : undefined}>
             Cases
+          </Link>
+          <Link href="/matching" aria-current={active === 'matching' ? 'page' : undefined}>
+            Matching
+          </Link>
+          <Link href="/reconciliation" aria-current={active === 'reconciliation' ? 'page' : undefined}>
+            Reconciliation
           </Link>
           <Link href="/status" aria-current={active === 'status' ? 'page' : undefined}>
             System Status

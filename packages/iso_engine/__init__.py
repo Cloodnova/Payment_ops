@@ -10,6 +10,13 @@ from __future__ import annotations
 from iso_engine.pacs008.adapter import map_pacs008_to_canonical
 from iso_engine.pacs008.identifier import identify_pacs008
 from iso_engine.pacs008.namespace import SUPPORTED_PACS_008_VERSIONS, SupportedVersion
+from iso_engine.registry import (
+    IsoMessageRegistry,
+    MessageDefinition,
+    RegisteredMessage,
+    UnsupportedMessageError,
+    build_default_registry,
+)
 from iso_engine.xml_errors import (
     EncodingError,
     MalformedXmlError,
@@ -23,16 +30,21 @@ from iso_engine.xsd_validator import SchemaIssue, SchemaValidationResult, valida
 
 __all__ = [
     "EncodingError",
+    "IsoMessageRegistry",
     "MalformedXmlError",
+    "MessageDefinition",
     "PayloadTooLargeError",
     "ProhibitedEntityError",
-    "SecureXmlDocument",
+    "RegisteredMessage",
     "SchemaIssue",
     "SchemaValidationResult",
     "SUPPORTED_PACS_008_VERSIONS",
+    "SecureXmlDocument",
     "SupportedVersion",
+    "UnsupportedMessageError",
     "UnsupportedMessageTypeError",
     "XmlError",
+    "build_default_registry",
     "identify_pacs008",
     "map_pacs008_to_canonical",
     "secure_parse",

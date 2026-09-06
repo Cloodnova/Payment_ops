@@ -40,6 +40,10 @@ def build_celery(broker_url: str, result_backend: str) -> Celery:
     from paymentops_worker.batch_tasks import process_batch
 
     app.task(name="paymentops.process_batch")(process_batch)
+    # Async reconciliation task.
+    from paymentops_worker.reconciliation_tasks import make_reconcile_task
+
+    make_reconcile_task(app)
     return app
 
 

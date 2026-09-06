@@ -29,6 +29,12 @@ def enqueue_process_batch(job_id: str, redis_key: str) -> str:
     return result.id or ""
 
 
+def enqueue_reconciliation(run_id: str) -> str:
+    """Send the reconciliation task to the worker. Returns the task id."""
+    result = _celery_client().send_task("paymentops.reconcile", args=[run_id])
+    return result.id or ""
+
+
 def get_redis(settings: Settings | None = None) -> Redis[str]:
     s = settings or get_settings()
     return aioredis.from_url(

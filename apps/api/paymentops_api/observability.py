@@ -98,6 +98,34 @@ case_actions_total = Counter(
     ("action",),
 )
 
+# Week 4 matching metrics (low-cardinality labels: classification/status/record_type only).
+# NEVER label with IBANs, record ids, names, or references.
+match_evaluations_total = Counter(
+    "paymentops_match_evaluations_total",
+    "Match pair evaluations",
+    ("classification",),
+)
+match_duration = Histogram(
+    "paymentops_match_duration_seconds",
+    "Match evaluation duration",
+    ("classification",),
+)
+match_classifications_total = Counter(
+    "paymentops_match_classifications_total",
+    "Match classifications produced",
+    ("classification", "record_type"),
+)
+match_candidate_count = Histogram(
+    "paymentops_match_candidate_count",
+    "Candidates returned per search",
+    ("record_type",),
+)
+reconciliation_jobs_total = Counter(
+    "paymentops_reconciliation_jobs_total",
+    "Reconciliation jobs",
+    ("status",),
+)
+
 
 class MetricAddressProvider(AddressProvider):
     """Wraps an :class:`AddressProvider`, recording low-cardinality metrics per request.

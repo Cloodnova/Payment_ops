@@ -169,6 +169,149 @@ export function analyzeProfile(profileId: string, payload: string, opts: { repai
   });
 }
 
+// ---------------------------------------------------------------- Matching / reconciliation
+
+export interface MatchRecord {
+  record_id: string;
+  record_type: string;
+  organization_id: string;
+  profile_id?: string | null;
+  source_system?: string | null;
+  message_type?: string | null;
+  instruction_id?: string | null;
+  end_to_end_id?: string | null;
+  transaction_id?: string | null;
+  amount?: number | string | null;
+  currency?: string | null;
+  booking_date?: string | null;
+  value_date?: string | null;
+  debtor_name?: string | null;
+  creditor_name?: string | null;
+  debtor_account?: string | null;
+  creditor_account?: string | null;
+  debtor_agent?: string | null;
+  creditor_agent?: string | null;
+  remittance_reference?: string | null;
+  external_reference?: string | null;
+  country?: string | null;
+  source_hash?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface FieldMatchResult {
+  field: string;
+  comparison_type: string;
+  original_a?: unknown;
+  original_b?: unknown;
+  normalized_a?: unknown;
+  normalized_b?: unknown;
+  similarity: number;
+  weight: number;
+  critical: boolean;
+  status: string;
+  explanation_code?: string | null;
+}
+
+export interface CriticalConflict {
+  code: string;
+  field: string;
+  detail: string;
+}
+
+export interface MatchDecision {
+  record_a_id: string;
+  record_b_id: string;
+  classification: string;
+  match_score: number;
+  critical_conflicts: CriticalConflict[];
+  field_results: FieldMatchResult[];
+  explanation_codes: string[];
+  policy_version?: string | null;
+  engine_version?: string | null;
+}
+
+export interface CandidateMatch {
+  candidate_id: string;
+  match_score: number;
+  classification: string;
+  top_evidence: FieldMatchResult[];
+  critical_conflicts: CriticalConflict[];
+}
+
+export interface MatchCandidate {
+  candidate_id: string;
+  source_record_id: string;
+  candidate_record_id: string;
+  match_score: number;
+  classification: string;
+  critical_conflicts: CriticalConflict[];
+  field_results?: FieldMatchResult[];
+  status: string;
+  operator?: string | null;
+  note?: string | null;
+}
+
+export interface ReconciliationRun {
+  run_id: string;
+  run_type: string;
+  status: string;
+  policy_version?: string | null;
+  total: number;
+  matched: number;
+  possible_match: number;
+  review_required: number;
+  unmatched: number;
+  duplicate_candidate: number;
+  failed: number;
+  report?: Record<string, unknown> | null;
+  created_at?: string | null;
+  completed_at?: string | null;
+  candidates?: MatchCandidate[];
+}
+
+export function createMatchRecord(record: MatchRecord) {
+  return apiJson<{ record_id: string }>('/api/v1/matching/records', { method: 'POST', body: JSON.stringify({ record }) });
+}
+
+export function listMatchRecords() {
+  return apiJson<MatchRecord[]>('/api/v1/matching/records');
+}
+
+export function evaluateMatch(body: { record_a?: MatchRecord; record_b?: MatchRecord; record_a_id?: string; record_b_id?: string; policy_id?: string }) {
+  return apiJson<MatchDecision>('/api/v1/matching/evaluate', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function searchCandidates(source: MatchRecord, policy_id?: string, max_candidates = 20) {
+  return apiJson<CandidateMatch[]>('/api/v1/matching/candidates', {
+    method: 'POST',
+    body: JSON.stringify({ source, policy_id, max_candidates }),
+  });
+}
+
+export function createReconciliation(body: { source_records: MatchRecord[]; candidate_records: MatchRecord[]; policy_id?: string }) {
+  return apiJson<{ run_id: string; status: string }>('/api/v1/matching/reconciliations', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function listReconciliations() {
+  return apiJson<ReconciliationRun[]>('/api/v1/matching/reconciliations');
+}
+
+export function getReconciliation(runId: string) {
+  return apiJson<ReconciliationRun>(`/api/v1/matching/reconciliations/${runId}`);
+}
+
+export function getReconciliationReport(runId: string) {
+  return fetch(`${API_BASE}/api/v1/matching/reconciliations/${runId}/report`, { headers: authHeaders() })
+    .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`Report failed (${res.status})`))));
+}
+
+export function decideCandidate(candidateId: string, action: string, note?: string, operator?: string) {
+  return apiJson<{ candidate_id: string; status: string; action: string }>(`/api/v1/matching/candidates/${candidateId}/decide`, {
+    method: 'POST',
+    body: JSON.stringify({ action, note, operator }),
+  });
+}
+
 async function safeJson<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${API_BASE}${path}`, {

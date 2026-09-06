@@ -14,6 +14,7 @@ def test_celery_app_registers_health_and_smoke_tasks():
     assert "paymentops.health" in celery.tasks
     assert "paymentops.smoke" in celery.tasks
     assert "paymentops.process_batch" in celery.tasks
+    assert "paymentops.reconcile" in celery.tasks
 
 
 def test_health_task_returns_ok():
