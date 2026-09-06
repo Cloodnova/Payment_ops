@@ -162,7 +162,7 @@ async def _correlate_and_build_lifecycle(
             result.correlation_evidence = correlation.evidence
             result.correlation_conflicts = correlation.conflicts
             result.lifecycle_id = str(lifecycle.id)
-        await _add_event(session, org, lifecycle, result, iso_row, event_type, CorrelationProfile())
+        await _add_event(session, org, lifecycle, result, iso_row, event_type, None)
 
     if result.lifecycle_id:
         await _update_lifecycle_status(session, result)
@@ -244,6 +244,9 @@ async def _add_event(
     correlation: Any,
 ) -> None:
     reasons: list[dict[str, object]] = []
+    evidence = result.correlation_evidence or (
+        list(getattr(correlation, "evidence", []) or []) if correlation else []
+    )
     session.add(
         PaymentLifecycleEventRow(
             organization_id=org,
@@ -257,8 +260,7 @@ async def _add_event(
             status=result.normalized_status or "UNKNOWN",
             raw_status_code=result.raw_status,
             reasons=reasons,
-            correlation_evidence=result.correlation_evidence
-            or (correlation.evidence if correlation else []),
+            correlation_evidence=evidence,
             source_hash=iso_row.message_hash,
         )
     )
