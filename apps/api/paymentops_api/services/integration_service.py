@@ -38,6 +38,7 @@ def _to_domain(row: IntegrationProfileRow) -> IntegrationProfile:
         retention_policy=row.retention_policy,
         address_policy=row.address_policy,
         ai_policy=row.ai_policy,
+        allowed_messages=row.allowed_messages or [],
         mapping=mapping,
         rules=rules,
         version_number=row.version_number,
@@ -60,6 +61,7 @@ async def create_profile(
         retention_policy=profile.retention_policy.value,
         address_policy=profile.address_policy,
         ai_policy=profile.ai_policy,
+        allowed_messages=profile.allowed_messages or [],
         mapping=profile.mapping.model_dump(),
         rules=[asdict(r) for r in profile.rules],
         version_number=profile.version_number,
@@ -90,6 +92,7 @@ async def update_profile(
     row.retention_policy = profile.retention_policy.value
     row.address_policy = profile.address_policy
     row.ai_policy = profile.ai_policy
+    row.allowed_messages = profile.allowed_messages or []
     row.mapping = profile.mapping.model_dump()
     row.rules = [asdict(r) for r in profile.rules]
     row.updated_at = datetime.now(UTC)

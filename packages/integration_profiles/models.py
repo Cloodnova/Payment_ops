@@ -64,6 +64,7 @@ class IntegrationProfile(BaseModel):
     retention_policy: RetentionPolicy = RetentionPolicy.METADATA_ONLY
     address_policy: str = "auto"  # auto | cloudnova | swift
     ai_policy: str = "disabled"
+    allowed_messages: list[str] = Field(default_factory=list)
     mapping: MappingDefinition
     rules: list[RuleConfig] = Field(default_factory=list)
     version_number: int = 1

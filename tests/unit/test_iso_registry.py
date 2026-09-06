@@ -11,13 +11,19 @@ from iso_engine import (
 )
 
 
-def test_default_registry_registers_pacs008():
+def test_default_registry_registers_supported_messages():
     reg = build_default_registry()
     defs = reg.supported()
-    assert len(defs) == 1
-    assert defs[0].version == "pacs.008.001.08"
-    assert defs[0].message_family == "pacs"
-    assert defs[0].namespace == "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+    versions = {d.version for d in defs}
+    assert versions == {
+        "pacs.008.001.08",
+        "pain.001.001.13",
+        "pacs.002.001.16",
+        "pacs.009.001.13",
+    }
+    pacs008 = next(d for d in defs if d.version == "pacs.008.001.08")
+    assert pacs008.message_family == "pacs"
+    assert pacs008.namespace == "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
 
 
 def test_resolve_by_identifier():

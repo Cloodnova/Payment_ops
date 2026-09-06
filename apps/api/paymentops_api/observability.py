@@ -126,6 +126,39 @@ reconciliation_jobs_total = Counter(
     ("status",),
 )
 
+# Week 5 ISO lifecycle metrics (low-cardinality labels: family/definition/version/status only).
+# NEVER label with message ids, IBANs, names, or references.
+iso_messages_total = Counter(
+    "paymentops_iso_messages_total",
+    "ISO messages analyzed",
+    ("family", "version", "status"),
+)
+iso_validation_failures_total = Counter(
+    "paymentops_iso_validation_failures_total",
+    "ISO schema validation failures",
+    ("family", "version"),
+)
+iso_adapter_duration = Histogram(
+    "paymentops_iso_adapter_duration_seconds",
+    "ISO adapter duration",
+    ("family", "version"),
+)
+lifecycle_correlations_total = Counter(
+    "paymentops_lifecycle_correlations_total",
+    "Lifecycle correlations",
+    ("status", "family"),
+)
+lifecycle_events_total = Counter(
+    "paymentops_lifecycle_events_total",
+    "Lifecycle events",
+    ("event_type",),
+)
+iso_unsupported_versions_total = Counter(
+    "paymentops_iso_unsupported_versions_total",
+    "Unsupported ISO versions rejected",
+    ("family",),
+)
+
 
 class MetricAddressProvider(AddressProvider):
     """Wraps an :class:`AddressProvider`, recording low-cardinality metrics per request.

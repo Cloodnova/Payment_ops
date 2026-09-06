@@ -16,6 +16,7 @@ class Base(DeclarativeBase):
 # Import model modules so their tables register on Base.metadata (used by Alembic).
 from paymentops_api.db.models import analysis as _analysis  # noqa: E402,F401
 from paymentops_api.db.models import integration as _integration  # noqa: E402,F401
+from paymentops_api.db.models import lifecycle as _lifecycle  # noqa: E402,F401
 from paymentops_api.db.models import matching as _matching  # noqa: E402,F401
 from paymentops_api.db.models import platform as _platform  # noqa: E402,F401
 from paymentops_api.db.models.analysis import (  # noqa: E402
@@ -31,6 +32,12 @@ from paymentops_api.db.models.integration import (  # noqa: E402
     CaseAction,
     IntegrationProfile,
     IntegrationProfileVersion,
+)
+from paymentops_api.db.models.lifecycle import (  # noqa: E402
+    IsoMessage,
+    MessageCorrelation,
+    PaymentLifecycleEventRow,
+    PaymentLifecycleRow,
 )
 from paymentops_api.db.models.matching import (  # noqa: E402
     MatchCandidate,
@@ -51,13 +58,17 @@ __all__ = [
     "CaseAction",
     "IntegrationProfile",
     "IntegrationProfileVersion",
+    "IsoMessage",
     "MatchCandidate",
     "MatchingPolicyRow",
     "MatchingPolicyVersion",
     "MatchRecordRow",
     "MatchRun",
+    "MessageCorrelation",
     "Organization",
     "PaymentCase",
+    "PaymentLifecycleEventRow",
+    "PaymentLifecycleRow",
     "RepairCandidate",
     "RuleFinding",
 ]

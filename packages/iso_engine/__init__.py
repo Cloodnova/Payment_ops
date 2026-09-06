@@ -7,9 +7,19 @@ overridden by AI or heuristic output (ADR-005).
 
 from __future__ import annotations
 
+from iso_engine.common import IsoMessageMetadata
+from iso_engine.pacs002.adapter import map_pacs002_to_status
+from iso_engine.pacs002.identifier import identify_pacs002
+from iso_engine.pacs002.namespace import SUPPORTED_PACS_002_VERSIONS
 from iso_engine.pacs008.adapter import map_pacs008_to_canonical
 from iso_engine.pacs008.identifier import identify_pacs008
 from iso_engine.pacs008.namespace import SUPPORTED_PACS_008_VERSIONS, SupportedVersion
+from iso_engine.pacs009.adapter import map_pacs009_to_canonical
+from iso_engine.pacs009.identifier import identify_pacs009
+from iso_engine.pacs009.namespace import SUPPORTED_PACS_009_VERSIONS
+from iso_engine.pain001.adapter import map_pain001_to_canonical
+from iso_engine.pain001.identifier import identify_pain001
+from iso_engine.pain001.namespace import SUPPORTED_PAIN_001_VERSIONS
 from iso_engine.registry import (
     IsoMessageRegistry,
     MessageDefinition,
@@ -26,10 +36,11 @@ from iso_engine.xml_errors import (
     XmlError,
 )
 from iso_engine.xml_security import SecureXmlDocument, secure_parse
-from iso_engine.xsd_validator import SchemaIssue, SchemaValidationResult, validate_pacs008
+from iso_engine.xsd_validator import SchemaIssue, SchemaValidationResult, validate_message
 
 __all__ = [
     "EncodingError",
+    "IsoMessageMetadata",
     "IsoMessageRegistry",
     "MalformedXmlError",
     "MessageDefinition",
@@ -38,15 +49,24 @@ __all__ = [
     "RegisteredMessage",
     "SchemaIssue",
     "SchemaValidationResult",
+    "SUPPORTED_PACS_002_VERSIONS",
     "SUPPORTED_PACS_008_VERSIONS",
+    "SUPPORTED_PACS_009_VERSIONS",
+    "SUPPORTED_PAIN_001_VERSIONS",
     "SecureXmlDocument",
     "SupportedVersion",
     "UnsupportedMessageError",
     "UnsupportedMessageTypeError",
     "XmlError",
     "build_default_registry",
+    "identify_pacs002",
     "identify_pacs008",
+    "identify_pacs009",
+    "identify_pain001",
+    "map_pacs002_to_status",
     "map_pacs008_to_canonical",
+    "map_pacs009_to_canonical",
+    "map_pain001_to_canonical",
     "secure_parse",
-    "validate_pacs008",
+    "validate_message",
 ]

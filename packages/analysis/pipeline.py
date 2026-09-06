@@ -13,6 +13,7 @@ layer. The XML/XSD validator is authoritative.
 from __future__ import annotations
 
 from hashlib import sha256
+from typing import Any
 from uuid import uuid4
 
 from address_engine.base import AddressProvider
@@ -21,15 +22,29 @@ from analysis.models import (
     AnalysisDiff,
     AnalysisIssue,
     AnalysisResult,
+    IsoAnalysisResult,
+)
+from iso_engine.common import IsoMessageMetadata
+from iso_engine.lifecycle.correlation import (
+    profile_from_message,
+    profile_from_status_report,
 )
 from iso_engine.pacs008.adapter import map_pacs008_to_canonical
 from iso_engine.pacs008.identifier import identify_pacs008
+from iso_engine.registry import IsoMessageRegistry
 from iso_engine.xml_security import SecureXmlDocument, secure_parse
-from iso_engine.xsd_validator import SchemaValidationResult, validate_pacs008
-from payment_domain.models import AddressReadiness, PaymentMessage, ValidationStatus
+from iso_engine.xsd_validator import SchemaValidationResult, validate_message, validate_pacs008
+from payment_domain.models import (
+    AddressReadiness,
+    LifecycleStatusReport,
+    PaymentMessage,
+    ValidationStatus,
+)
 from repair_engine.generator import addresses, generate_candidate
 from repair_engine.models import RepairCandidate
 from rules_engine.base import RuleEngine
+
+ENGINE_VERSION = "0.3.0"
 
 
 class AnalysisPipeline:
@@ -67,6 +82,137 @@ class AnalysisPipeline:
             message_version=version.identifier,
             repair=repair,
             include_candidate_xml=include_candidate_xml,
+        )
+
+    def analyze_iso(
+        self,
+        payload: bytes,
+        registry: IsoMessageRegistry,
+        *,
+        max_transactions: int = 100,
+    ) -> IsoAnalysisResult:
+        """Analyze ANY supported ISO message via the registry.
+
+        Dispatch is never family-only; the exact version is resolved from the namespace.
+        Returns an ``IsoAnalysisResult``. Lifecycle correlation (DB-backed) is performed by the
+        API service, which receives the correlation profiles carried here.
+        """
+        from iso_engine.common import build_metadata
+
+        doc = secure_parse(payload, max_bytes=self._max_payload_bytes)
+        reg_msg = registry.resolve_root(doc.root)
+        definition = reg_msg.definition
+        version_id = definition.version
+
+        xsd_result = validate_message(doc.root, version_id)
+        artifact = reg_msg.adapter(doc.root, reg_msg.version_obj)
+
+        metadata = build_metadata(
+            definition,
+            message_id=getattr(artifact, "message_id", None),
+            creation_datetime=getattr(artifact, "creation_datetime", None),
+            source_adapter=f"{definition.message_family}_{version_id}",
+            schema_version=version_id,
+        )
+
+        if isinstance(artifact, LifecycleStatusReport):
+            return self._iso_status_result(artifact, metadata, xsd_result)
+        if isinstance(artifact, PaymentMessage):
+            return self._iso_payment_result(
+                artifact, metadata, xsd_result, doc=doc, max_transactions=max_transactions
+            )
+        raise TypeError(f"adapter produced unsupported artifact type: {type(artifact)}")
+
+    def _iso_payment_result(
+        self,
+        message: PaymentMessage,
+        metadata: IsoMessageMetadata,
+        xsd_result: SchemaValidationResult,
+        *,
+        doc: SecureXmlDocument,
+        max_transactions: int,
+    ) -> IsoAnalysisResult:
+        if len(message.transactions) > max_transactions:
+            from iso_engine.xml_errors import PayloadTooLargeError
+
+            raise PayloadTooLargeError(f"message exceeds {max_transactions} transactions")
+        message.validation_status = (
+            ValidationStatus.VALID if xsd_result.valid else ValidationStatus.INVALID
+        )
+        result = self.analyze_message(
+            message,
+            doc=doc,
+            xsd_result=xsd_result,
+            message_type=metadata.message_version,
+            message_version=metadata.message_version,
+            repair=True,
+            include_candidate_xml=False,
+        )
+        profiles = profile_from_message(message)
+        return IsoAnalysisResult(
+            case_id=result.case_id,
+            message_family=metadata.message_family,
+            message_definition=metadata.message_definition,
+            message_version=metadata.message_version,
+            namespace=metadata.namespace,
+            message_id=metadata.message_id,
+            adapter_version=metadata.adapter_version,
+            schema_validation=xsd_result.valid,
+            schema_version=metadata.schema_version,
+            original_validation_status=result.original_validation_status,
+            schema_issues=result.schema_issues,
+            rule_findings=result.rule_findings,
+            address_analyses=result.address_analyses,
+            address_readiness=result.address_readiness,
+            repair_status=result.repair_status,
+            candidate_diff=result.candidate_diff,
+            candidate_validation_status=result.candidate_validation_status,
+            canonical_model_version="payment_domain.v2",
+            engine_version=ENGINE_VERSION,
+            input_hash=result.input_hash,
+            warnings=result.warnings,
+            correlation_profiles=[p.__dict__ for p in profiles],
+        )
+
+    def _iso_status_result(
+        self,
+        report: LifecycleStatusReport,
+        metadata: IsoMessageMetadata,
+        xsd_result: SchemaValidationResult,
+    ) -> IsoAnalysisResult:
+        profiles = profile_from_status_report(report)
+        normalized = (
+            report.transaction_statuses[0].normalized_status.value
+            if report.transaction_statuses
+            else report.group_status.value
+        )
+        raw = (
+            report.transaction_statuses[0].raw_iso_status
+            if report.transaction_statuses
+            else report.group_status_raw
+        )
+        return IsoAnalysisResult(
+            case_id=f"case-{uuid4().hex[:16]}",
+            message_family=metadata.message_family,
+            message_definition=metadata.message_definition,
+            message_version=metadata.message_version,
+            namespace=metadata.namespace,
+            message_id=metadata.message_id,
+            adapter_version=metadata.adapter_version,
+            schema_validation=xsd_result.valid,
+            schema_version=metadata.schema_version,
+            original_validation_status="valid" if xsd_result.valid else "invalid",
+            schema_issues=[
+                AnalysisIssue(code=i.code, severity=i.severity, path=i.path, message=i.message)
+                for i in xsd_result.issues
+            ],
+            canonical_model_version="payment_domain.v2",
+            engine_version=ENGINE_VERSION,
+            input_hash=_message_hash(report),
+            raw_status=raw,
+            normalized_status=normalized,
+            correlation_profiles=[p.__dict__ for p in profiles],
+            warnings=[] if xsd_result.valid else ["Original message did not pass XSD validation"],
         )
 
     def analyze_message(
@@ -172,8 +318,8 @@ class AnalysisPipeline:
         )
 
 
-def _message_hash(message: PaymentMessage) -> str:
-    """Deterministic hash of a canonical message (used when no raw payload is hashed)."""
+def _message_hash(message: Any) -> str:
+    """Deterministic hash of a canonical model (used when no raw payload is hashed)."""
     return sha256(message.model_dump_json(exclude_none=True).encode("utf-8")).hexdigest()
 
 

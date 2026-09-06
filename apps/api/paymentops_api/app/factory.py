@@ -25,6 +25,7 @@ from paymentops_api.routers import (
     health,
     info,
     integrations,
+    iso,
     matching,
     metrics,
     profiles,
@@ -38,6 +39,7 @@ from address_engine.providers import (
     SwiftDerivedAddressProvider,
 )
 from analysis import AnalysisPipeline
+from iso_engine import build_default_registry
 from rules_engine import build_address_ruleset
 
 logger = get_logger("paymentops.app")
@@ -130,6 +132,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(batches.router)
     app.include_router(dashboard.router)
     app.include_router(matching.router)
+    app.include_router(iso.router)
 
     # Attach the analysis pipeline (deterministic engines) so routes can use it.
     provider = build_address_provider(settings)
@@ -143,5 +146,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         address_provider=MetricAddressProvider(provider, label=metric_label),
         rules_engine=build_address_ruleset(),
     )
+    app.state.iso_registry = build_default_registry()
 
     return app

@@ -24,10 +24,9 @@ from address_engine.providers import (
 )
 from analysis.pipeline import AnalysisPipeline
 from integration_profiles.models import InputFormat, IntegrationProfile
-from iso_engine.pacs008.adapter import map_pacs008_to_canonical
-from iso_engine.pacs008.identifier import identify_pacs008
+from iso_engine.registry import IsoMessageRegistry, build_default_registry
 from iso_engine.xml_security import SecureXmlDocument, secure_parse
-from iso_engine.xsd_validator import SchemaValidationResult, validate_pacs008
+from iso_engine.xsd_validator import SchemaValidationResult, validate_message
 from mapping_engine.mapper import map_to_canonical
 from payment_domain.models import PaymentMessage
 from rules_engine import build_address_ruleset
@@ -58,16 +57,21 @@ def build_profile_provider(address_policy: str, settings: Settings) -> AddressPr
 
 
 def map_input(
-    profile: IntegrationProfile, payload: bytes
+    profile: IntegrationProfile, payload: bytes, registry: IsoMessageRegistry
 ) -> tuple[PaymentMessage, dict[str, object]]:
     """Map raw input (by profile.input_format) into a canonical PaymentMessage."""
     fmt = profile.input_format
     if fmt == InputFormat.ISO20022_XML:
         doc = secure_parse(payload)
-        version = identify_pacs008(doc.root)
-        xsd = validate_pacs008(doc.root, version)
-        message = map_pacs008_to_canonical(doc.root, version)
-        return message, {"xsd_result": xsd, "doc": doc, "message_version": version.identifier}
+        reg_msg = registry.resolve_root(doc.root)
+        version_id = reg_msg.definition.version
+        if profile.allowed_messages and version_id not in profile.allowed_messages:
+            raise ValueError(f"message {version_id} not allowed for this profile")
+        xsd = validate_message(doc.root, version_id)
+        artifact = reg_msg.adapter(doc.root, reg_msg.version_obj)
+        if not isinstance(artifact, PaymentMessage):
+            raise ValueError("profile analysis supports payment messages only")
+        return artifact, {"xsd_result": xsd, "doc": doc, "message_version": version_id}
 
     if fmt == InputFormat.JSON:
         data = json.loads(payload.decode("utf-8"))
@@ -117,10 +121,12 @@ def analyze_profile(
     payload: bytes,
     *,
     settings: Settings,
+    registry: IsoMessageRegistry | None = None,
     repair: bool = True,
     include_candidate_xml: bool = False,
 ) -> dict[str, object]:
-    message, meta = map_input(profile, payload)
+    registry = registry or build_default_registry()
+    message, meta = map_input(profile, payload, registry)
     rules = build_profile_rules(profile)
     provider = build_profile_provider(profile.address_policy, settings)
     pipeline = AnalysisPipeline(address_provider=provider, rules_engine=rules)

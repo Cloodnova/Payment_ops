@@ -17,6 +17,8 @@ class SupportedVersion:
     message_name: str
     # XML targetNamespace
     namespace: str
+    # Root element under Document, e.g. "FIToFICstmrCdtTrf"
+    root_element: str = "FIToFICstmrCdtTrf"
 
 
 SUPPORTED_PACS_008_VERSIONS: dict[str, SupportedVersion] = {

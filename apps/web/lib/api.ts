@@ -312,6 +312,123 @@ export function decideCandidate(candidateId: string, action: string, note?: stri
   });
 }
 
+// ---------------------------------------------------------------- ISO / lifecycle
+
+export interface IsoAnalysisResult {
+  case_id: string;
+  message_family?: string | null;
+  message_definition?: string | null;
+  message_version?: string | null;
+  namespace?: string | null;
+  message_id?: string | null;
+  adapter_version?: string | null;
+  schema_validation: boolean;
+  schema_version?: string | null;
+  original_validation_status: string;
+  schema_issues?: { code: string; severity: string; path?: string | null; message: string }[];
+  rule_findings?: Record<string, unknown>[];
+  address_analyses?: { party?: string | null; readiness?: string | null; evidence_level?: string | null; country_code?: string | null; town_name?: string | null }[];
+  address_readiness?: string | null;
+  address_provider_coverage?: string | null;
+  repair_status?: string | null;
+  canonical_model_version?: string | null;
+  engine_version?: string | null;
+  input_hash?: string | null;
+  lifecycle_id?: string | null;
+  correlation_status?: string | null;
+  correlation_evidence?: string[];
+  correlation_conflicts?: string[];
+  lifecycle_events?: Record<string, unknown>[];
+  raw_status?: string | null;
+  normalized_status?: string | null;
+  warnings?: string[];
+}
+
+export interface IsoMessage {
+  id: string;
+  message_id?: string | null;
+  message_family: string;
+  message_definition: string;
+  message_version: string;
+  namespace: string;
+  schema_validation: boolean;
+  status: string;
+  raw_status?: string | null;
+  normalized_status?: string | null;
+  created_at?: string | null;
+}
+
+export interface Lifecycle {
+  lifecycle_id: string;
+  organization_id: string;
+  primary_reference?: string | null;
+  end_to_end_id?: string | null;
+  instruction_id?: string | null;
+  transaction_id?: string | null;
+  original_message_id?: string | null;
+  amount_minor?: number | null;
+  currency?: string | null;
+  current_status: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  events?: LifecycleEvent[];
+  correlations?: Correlation[];
+}
+
+export interface LifecycleEvent {
+  id: string;
+  event_type: string;
+  message_family?: string | null;
+  message_definition?: string | null;
+  message_version?: string | null;
+  message_id?: string | null;
+  timestamp?: string | null;
+  status: string;
+  raw_status_code?: string | null;
+  reasons?: Record<string, unknown>[];
+  correlation_evidence?: string[];
+}
+
+export interface Correlation {
+  id: string;
+  source_message_id?: string | null;
+  candidate_message_id?: string | null;
+  correlation_status: string;
+  evidence: string[];
+  conflicts: string[];
+  operator?: string | null;
+  note?: string | null;
+}
+
+export function analyzeIso(xml: string) {
+  return apiJson<IsoAnalysisResult>('/api/v1/iso/analyze', { method: 'POST', body: JSON.stringify({ xml }) });
+}
+
+export function listIsoMessages(params: { family?: string; definition?: string; version?: string; status?: string } = {}) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+  return apiJson<IsoMessage[]>(`/api/v1/iso/messages?${q.toString()}`);
+}
+
+export function getIsoMessage(id: string) {
+  return apiJson<IsoMessage>(`/api/v1/iso/messages/${id}`);
+}
+
+export function listLifecycles() {
+  return apiJson<Lifecycle[]>('/api/v1/lifecycles');
+}
+
+export function getLifecycle(id: string) {
+  return apiJson<Lifecycle>(`/api/v1/lifecycles/${id}`);
+}
+
+export function decideCorrelation(lifecycleId: string, correlationId: string, action: string, note?: string, operator?: string) {
+  return apiJson<{ correlation_id: string; status: string; action: string }>(
+    `/api/v1/lifecycles/${lifecycleId}/correlations/${correlationId}/decide`,
+    { method: 'POST', body: JSON.stringify({ action, note, operator }) },
+  );
+}
+
 async function safeJson<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${API_BASE}${path}`, {

@@ -32,6 +32,7 @@ class IntegrationProfile(Base):
     )
     address_policy: Mapped[str] = mapped_column(String(32), nullable=False, default="auto")
     ai_policy: Mapped[str] = mapped_column(String(32), nullable=False, default="disabled")
+    allowed_messages: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     mapping: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     rules: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False, default=list)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

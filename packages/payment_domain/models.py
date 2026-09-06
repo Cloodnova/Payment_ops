@@ -39,6 +39,7 @@ class ValidationStatus(StrEnum):
 
 class SourceFormat(StrEnum):
     XML_PACS_008 = "xml_pacs_008"
+    XML_PACS_009 = "xml_pacs_009"
     XML_PAIN_001 = "xml_pain_001"
     JSON = "json"
     CSV = "csv"
@@ -301,6 +302,145 @@ class PaymentEnvelope(PydanticWithRedaction):
     creditor: Party | None = None
     amount: MonetaryAmount | None = None
     validation_status: ValidationStatus = ValidationStatus.PENDING
+
+
+# --------------------------------------------------------------------------- Week 5 lifecycle
+
+
+class LifecycleEventType(StrEnum):
+    """PaymentOps analytical lifecycle event categories (not raw ISO codes)."""
+
+    INITIATED = "INITIATED"
+    INTERBANK_TRANSFER = "INTERBANK_TRANSFER"
+    FI_TRANSFER = "FI_TRANSFER"
+    STATUS_RECEIVED = "STATUS_RECEIVED"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    UNKNOWN_STATUS = "UNKNOWN_STATUS"
+
+
+class PaymentStatus(StrEnum):
+    """Normalized PaymentOps analytical status (never a raw ISO code)."""
+
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    PARTIALLY_ACCEPTED = "PARTIALLY_ACCEPTED"
+    UNKNOWN = "UNKNOWN"
+
+
+class CorrelationStatus(StrEnum):
+    """Deterministic lifecycle-correlation result (Task 16)."""
+
+    CORRELATED = "CORRELATED"
+    POSSIBLE_CORRELATION = "POSSIBLE_CORRELATION"
+    UNRESOLVED = "UNRESOLVED"
+    CONFLICT = "CONFLICT"
+    AMBIGUOUS = "AMBIGUOUS"
+
+
+class StatusReason(PydanticWithRedaction):
+    """A status reason code with provenance. Never inferred as legal/compliance meaning."""
+
+    code: str | None = None
+    proprietary_code: str | None = None
+    additional_information: str | None = None
+    originator: str | None = None
+    normalized_category: str | None = None
+
+
+class RelatedPaymentReference(PydanticWithRedaction):
+    """A reference to a related payment message (for correlation)."""
+
+    message_id: str | None = None
+    message_definition: str | None = None
+    message_version: str | None = None
+    instruction_id: str | None = None
+    end_to_end_id: str | None = None
+    transaction_id: str | None = None
+    amount: MonetaryAmount | None = None
+    uetr: str | None = None
+
+
+class TransactionStatus(PydanticWithRedaction):
+    """A single transaction-level status within a pacs.002 status report."""
+
+    original_instruction_id: str | None = None
+    original_end_to_end_id: str | None = None
+    original_transaction_id: str | None = None
+    raw_iso_status: str | None = None
+    normalized_status: PaymentStatus = PaymentStatus.UNKNOWN
+    reasons: list[StatusReason] = Field(default_factory=list)
+    amount: MonetaryAmount | None = None
+    reference: RelatedPaymentReference | None = None
+
+
+class LifecycleStatusReport(PydanticWithRedaction):
+    """Canonical representation of a pacs.002 status report (NOT a PaymentMessage).
+
+    This is a status report, not a payment instruction. Never forced into a fake transaction.
+    """
+
+    message_family: str | None = None
+    message_definition: str | None = None
+    message_version: str | None = None
+    namespace: str | None = None
+    message_id: str | None = None
+    creation_datetime: datetime | None = None
+
+    original_message_id: str | None = None
+    original_message_definition: str | None = None
+    group_status_raw: str | None = None
+    group_status: PaymentStatus = PaymentStatus.UNKNOWN
+
+    transaction_statuses: list[TransactionStatus] = Field(default_factory=list)
+
+    @property
+    def referenced_references(self) -> list[RelatedPaymentReference]:
+        refs: list[RelatedPaymentReference] = []
+        for tx in self.transaction_statuses:
+            if tx.reference is not None:
+                refs.append(tx.reference)
+        return refs
+
+
+class PaymentLifecycleEvent(PydanticWithRedaction):
+    """A single analytical event in a payment lifecycle (metadata, not executable state)."""
+
+    event_type: LifecycleEventType = LifecycleEventType.STATUS_RECEIVED
+    message_family: str | None = None
+    message_definition: str | None = None
+    message_version: str | None = None
+    message_id: str | None = None
+    timestamp: datetime | None = None
+    status: PaymentStatus = PaymentStatus.UNKNOWN
+    raw_status_code: str | None = None
+    reasons: list[StatusReason] = Field(default_factory=list)
+    correlation_evidence: list[str] = Field(default_factory=list)
+    source_hash: str | None = None
+
+
+class PaymentLifecycle(PydanticWithRedaction):
+    """Analytical payment lifecycle state (NOT a real executable payment state machine)."""
+
+    lifecycle_id: str
+    organization_id: str
+    primary_reference: str | None = None
+    end_to_end_id: str | None = None
+    instruction_id: str | None = None
+    transaction_id: str | None = None
+    uetr: str | None = None
+    original_message_id: str | None = None
+    amount: MonetaryAmount | None = None
+    debtor: Party | None = None
+    creditor: Party | None = None
+    events: list[PaymentLifecycleEvent] = Field(default_factory=list)
+    current_status: PaymentStatus = PaymentStatus.UNKNOWN
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 def utcnow() -> datetime:

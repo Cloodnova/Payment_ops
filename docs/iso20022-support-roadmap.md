@@ -20,19 +20,22 @@ Unsupported versions fail with a clear `UnsupportedMessageError` — never silen
 | Message | Version | Status |
 |---------|---------|--------|
 | pacs.008 | 001.08 | **Supported** (parser + XSD validation + canonical mapper) |
+| pain.001 | 001.13 | **Supported** (parser + XSD validation + canonical mapper + lifecycle) |
+| pacs.002 | 001.16 | **Supported** (status report parser + XSD validation + lifecycle correlation) |
+| pacs.009 | 001.13 | **Supported** (FI-to-FI parser + XSD validation + canonical mapper + lifecycle) |
 
 ## Planned sequence (v1)
 
 1. pacs.008 — **done**
-2. pain.001 — planned
-3. pacs.002 — planned
-4. pacs.009 — planned
+2. pain.001 — **done**
+3. pacs.002 — **done**
+4. pacs.009 — **done**
 5. camt.053 — planned
 6. camt.054 — planned
 
 ## Constraints
 
-- Week 4 is **not** an ISO-expansion week. Only the registry/foundation was added.
-- Do not begin full `pain.001`/`pacs.002`/`pacs.009`/`camt.*` adapters unless required for a
-  minimal architecture test.
+- Week 5 added pain.001.001.13, pacs.002.001.16, pacs.009.001.13. Only these exact versions
+  are supported; no family-only dispatch.
+- Unsupported versions fail with a structured error, never silently parsed.
 - No claim of support for messages not listed under "Current support".

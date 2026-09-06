@@ -90,15 +90,20 @@ def _safe_message(error: etree._LogEntry) -> str:
     return msg[:200]
 
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=32)
 def load_validator(schema_version: str) -> XsdValidator:
-    """Load (and cache) the validator for a supported pacs.008 version identifier."""
+    """Load (and cache) the validator for a supported ISO version identifier."""
     schema_path = _SCHEMA_ROOT / schema_version / f"{schema_version}.xsd"
     if not schema_path.exists():
         raise FileNotFoundError(f"Bundled schema not found for {schema_version}")
     return XsdValidator(schema_path)
 
 
-def validate_pacs008(root: etree._Element, version: SupportedVersion) -> SchemaValidationResult:
-    validator = load_validator(version.identifier)
+def validate_message(root: etree._Element, version_identifier: str) -> SchemaValidationResult:
+    """Validate a securely-parsed document against its version-specific bundled schema."""
+    validator = load_validator(version_identifier)
     return validator.validate(root)
+
+
+def validate_pacs008(root: etree._Element, version: SupportedVersion) -> SchemaValidationResult:
+    return validate_message(root, version.identifier)
