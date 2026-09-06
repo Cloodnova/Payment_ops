@@ -22,6 +22,7 @@ from payment_domain.models import (
     PaymentMessage,
     PaymentTransaction,
     PostalAddress,
+    SourceFormat,
 )
 from repair_engine.models import ChangeSource, DiffEntry, RepairCandidate
 from repair_engine.xml_reconstruction import apply_changes, serialize
@@ -95,7 +96,7 @@ def generate_candidate(
             note="No repair changes required",
         )
 
-    if doc is not None:
+    if doc is not None and message.source_format == SourceFormat.XML_PACS_008:
         # Reconstruct the candidate XML from the original tree (never mutating the original).
         new_root, applied = apply_changes(doc.root, changes)
         candidate_xml = serialize(new_root)
