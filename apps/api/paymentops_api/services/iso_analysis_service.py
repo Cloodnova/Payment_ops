@@ -255,7 +255,7 @@ async def _add_event(
             message_family=result.message_family,
             message_definition=result.message_definition,
             message_version=result.message_version,
-            message_id=iso_row.id,
+            message_id=str(iso_row.id),
             timestamp=result.processed_at,
             status=result.normalized_status or "UNKNOWN",
             raw_status_code=result.raw_status,
