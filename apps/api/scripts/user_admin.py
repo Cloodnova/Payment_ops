@@ -51,25 +51,15 @@ async def _run(args: argparse.Namespace) -> int:
                     print(f"{u.email}\t{u.role}\t{u.status}\t{u.organization_id}")
                 return 0
 
-            user = await user_service.get_user_by_email(session, args.email)
-            if user is None:
-                print("User not found.")
-                return 1
-
-            if args.command == "reset-password":
-                password = _password_from_env()
-                if not password:
-                    print("Set PAYMENTOPS_USER_PASSWORD (>=12 chars).")
-                    return 2
-                await user_service.set_password(session, user, password)
-                print(f"Password reset for {user.email}; all sessions revoked.")
-                return 0
-
             if args.command == "create-user":
                 password = _password_from_env()
                 if not password:
                     print("Set PAYMENTOPS_USER_PASSWORD (>=12 chars).")
                     return 2
+                existing = await user_service.get_user_by_email(session, args.email)
+                if existing is not None:
+                    print("A user with that email already exists.")
+                    return 1
                 result = await session.execute(
                     select(Organization).where(Organization.public_id == args.org)
                 )
@@ -86,6 +76,20 @@ async def _run(args: argparse.Namespace) -> int:
                     role=user_service.UserRole(args.role),
                 )
                 print(f"Created {args.role} user {args.email} in '{args.org}'.")
+                return 0
+
+            user = await user_service.get_user_by_email(session, args.email)
+            if user is None:
+                print("User not found.")
+                return 1
+
+            if args.command == "reset-password":
+                password = _password_from_env()
+                if not password:
+                    print("Set PAYMENTOPS_USER_PASSWORD (>=12 chars).")
+                    return 2
+                await user_service.set_password(session, user, password)
+                print(f"Password reset for {user.email}; all sessions revoked.")
                 return 0
 
             if args.command == "disable-user":

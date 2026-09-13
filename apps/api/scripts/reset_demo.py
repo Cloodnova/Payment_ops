@@ -83,7 +83,7 @@ async def _reset(org_public_id: str, delete_users: bool) -> int:
                 print(f"Organization '{org_public_id}' not found.")
                 return 1
 
-            tables, edges = await _load_graph(session.connection())
+            tables, edges = await _load_graph(await session.connection())
             targets = [t for t in tables if delete_users or t not in PROTECTED]
             order = _deletion_order(targets, edges)
 
