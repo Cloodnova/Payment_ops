@@ -104,7 +104,8 @@ async def test_case_e_duplicate_account_entry():
         oid = str(org.id)
         await _analyze(session, oid, "pain001-00113-valid-single.xml")
         await _analyze(session, oid, "camt054-00114-valid-debit.xml")
-        await _analyze(session, oid, "camt054-00114-valid-debit.xml")  # same again
+        # A different message (distinct MsgId) repeating the same entry identity.
+        await _analyze(session, oid, "camt054-00114-duplicate.xml")
         entries = await account_service.list_account_entries(session, oid)
         assert any(e.reconciliation_status == "DUPLICATE_ACCOUNT_ENTRY" for e in entries)
     await engine.dispose()

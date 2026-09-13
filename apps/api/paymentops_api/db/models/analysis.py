@@ -110,7 +110,7 @@ class AuditEvent(Base):
     organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True, index=True
     )
-    case_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    case_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     profile_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     profile_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     mapping_version: Mapped[str | None] = mapped_column(String(64), nullable=True)

@@ -158,4 +158,72 @@ describe('authenticated same-origin API proxy', () => {
     const res = await GET(req, { params: Promise.resolve({ path: ['api', 'v1', 'dashboard'] }) });
     expect(res.status).toBe(502);
   });
+
+  it('denies a VIEWER a mutating action with 403', async () => {
+    validateSessionToken.mockResolvedValue({ ...USER, role: 'VIEWER' });
+    const calls = stubFetch();
+    const req = new NextRequest('https://app.test/api/backend/api/v1/cases/x/actions', {
+      method: 'POST',
+      headers: {
+        cookie: 'paymentops_session=abc; paymentops_csrf=t',
+        'content-type': 'application/json',
+        'x-csrf-token': 't',
+      },
+      body: JSON.stringify({ action: 'approve' }),
+    });
+    const res = await POST(req, { params: Promise.resolve({ path: ['api', 'v1', 'cases', 'x', 'actions'] }) });
+    expect(res.status).toBe(403);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('allows an OPERATOR a mutating action', async () => {
+    validateSessionToken.mockResolvedValue({ ...USER, role: 'OPERATOR' });
+    const calls = stubFetch(200, { ok: true });
+    const req = new NextRequest('https://app.test/api/backend/api/v1/cases/x/actions', {
+      method: 'POST',
+      headers: {
+        cookie: 'paymentops_session=abc; paymentops_csrf=t',
+        'content-type': 'application/json',
+        'x-csrf-token': 't',
+      },
+      body: JSON.stringify({ action: 'approve' }),
+    });
+    const res = await POST(req, { params: Promise.resolve({ path: ['api', 'v1', 'cases', 'x', 'actions'] }) });
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('denies an OPERATOR an administrative action with 403', async () => {
+    validateSessionToken.mockResolvedValue({ ...USER, role: 'OPERATOR' });
+    const calls = stubFetch();
+    const req = new NextRequest('https://app.test/api/backend/api/v1/clients', {
+      method: 'POST',
+      headers: {
+        cookie: 'paymentops_session=abc; paymentops_csrf=t',
+        'content-type': 'application/json',
+        'x-csrf-token': 't',
+      },
+      body: JSON.stringify({ organization_id: 'org-1' }),
+    });
+    const res = await POST(req, { params: Promise.resolve({ path: ['api', 'v1', 'clients'] }) });
+    expect(res.status).toBe(403);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('allows an ADMIN an administrative action', async () => {
+    validateSessionToken.mockResolvedValue({ ...USER, role: 'ADMIN' });
+    const calls = stubFetch(201, { client_id: 'cn_x' });
+    const req = new NextRequest('https://app.test/api/backend/api/v1/clients', {
+      method: 'POST',
+      headers: {
+        cookie: 'paymentops_session=abc; paymentops_csrf=t',
+        'content-type': 'application/json',
+        'x-csrf-token': 't',
+      },
+      body: JSON.stringify({ organization_id: 'org-1' }),
+    });
+    const res = await POST(req, { params: Promise.resolve({ path: ['api', 'v1', 'clients'] }) });
+    expect(res.status).toBe(201);
+    expect(calls).toHaveLength(1);
+  });
 });

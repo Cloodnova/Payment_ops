@@ -51,7 +51,11 @@ def test_migrations_are_consistent_offline():
 def test_migration_roundtrip_live():
     """Runs upgrade head then downgrade base against a real Postgres if available."""
     url = os.environ["TEST_DATABASE_URL"]
+    # Alembic's online env uses a synchronous engine, so use the psycopg2 driver.
+    sync_url = url.replace("+asyncpg", "+psycopg2")
     cfg = _alembic_config()
-    cfg.set_main_option("sqlalchemy.url", url)
+    cfg.set_main_option("sqlalchemy.url", sync_url)
     command.upgrade(cfg, "head")
     command.downgrade(cfg, "base")
+    # Restore the schema so later tests in the same database still have tables.
+    command.upgrade(cfg, "head")

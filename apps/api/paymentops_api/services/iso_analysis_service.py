@@ -42,7 +42,7 @@ async def analyze_iso_message(
     msg_hash = _message_hash_from_result(result)
     existing = await _find_by_hash(session, org, msg_hash)
     if existing is not None:
-        result.lifecycle_id = await _lifecycle_id_for_message(session, org, existing.id)
+        result.lifecycle_id = await _lifecycle_id_for_message(session, org, str(existing.id))
         return result
 
     iso_row = await _persist_iso_message(session, org, result, msg_hash)
@@ -152,6 +152,10 @@ async def _correlate_and_build_lifecycle(
             result.correlation_conflicts = correlation.conflicts
             result.lifecycle_id = str(lifecycle.id)
             await _add_event(session, org, lifecycle, result, iso_row, event_type, correlation)
+            if result.normalized_status:
+                lifecycle.current_status = result.normalized_status
+                lifecycle.updated_at = datetime.now(UTC)
+                await session.commit()
         return
 
     # Payment/initiation messages (pain.001 / pacs.008 / pacs.009): create or update lifecycle.

@@ -121,6 +121,89 @@ async def test_lockout_after_repeated_failures():
     await engine.dispose()
 
 
+async def test_set_password_revokes_sessions_and_clears_lockout():
+    url = os.environ["TEST_DATABASE_URL"]
+    engine = create_async_engine(url)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        org = await _seed_org(session, "auth-admin-pw")
+        user = await user_service.create_user(
+            session,
+            organization_id=str(org.id),
+            email="admin-pw@example.com",
+            display_name="AdminPw",
+            password="old-strong-password-1",
+            role=user_service.UserRole.OPERATOR,
+        )
+        token, _ = await user_service.create_session(session, user)
+        for _ in range(user_service.MAX_FAILED_LOGINS):
+            with pytest.raises(user_service.AuthenticationError):
+                await user_service.authenticate(session, user.email, "wrong")
+        await session.refresh(user)
+        assert user.locked_until is not None
+
+        await user_service.set_password(session, user, "new-strong-password-1")
+        await session.refresh(user)
+        # Lockout cleared and all sessions revoked.
+        assert user.locked_until is None and user.failed_login_count == 0
+        assert await user_service.resolve_session(session, token) is None
+        # New password works, old one does not.
+        assert (
+            await user_service.authenticate(session, user.email, "new-strong-password-1")
+        ).id == user.id
+        with pytest.raises(user_service.AuthenticationError):
+            await user_service.authenticate(session, user.email, "old-strong-password-1")
+    await engine.dispose()
+
+
+async def test_disable_revokes_sessions_and_reenable_restores_login():
+    url = os.environ["TEST_DATABASE_URL"]
+    engine = create_async_engine(url)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        org = await _seed_org(session, "auth-admin-status")
+        user = await user_service.create_user(
+            session,
+            organization_id=str(org.id),
+            email="status@example.com",
+            display_name="Status",
+            password="a-strong-password-1",
+            role=user_service.UserRole.VIEWER,
+        )
+        token, _ = await user_service.create_session(session, user)
+
+        await user_service.set_status(session, user, user_service.UserStatus.DISABLED)
+        assert await user_service.resolve_session(session, token) is None
+        with pytest.raises(user_service.AccountDisabledError):
+            await user_service.authenticate(session, user.email, "a-strong-password-1")
+
+        await user_service.set_status(session, user, user_service.UserStatus.ACTIVE)
+        assert (
+            await user_service.authenticate(session, user.email, "a-strong-password-1")
+        ).id == user.id
+    await engine.dispose()
+
+
+async def test_set_role_updates_authorization_role():
+    url = os.environ["TEST_DATABASE_URL"]
+    engine = create_async_engine(url)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        org = await _seed_org(session, "auth-admin-role")
+        user = await user_service.create_user(
+            session,
+            organization_id=str(org.id),
+            email="role@example.com",
+            display_name="Role",
+            password="a-strong-password-1",
+            role=user_service.UserRole.VIEWER,
+        )
+        await user_service.set_role(session, user, user_service.UserRole.ADMIN)
+        await session.refresh(user)
+        assert user.role == user_service.UserRole.ADMIN.value
+    await engine.dispose()
+
+
 async def test_expired_session_is_rejected():
     url = os.environ["TEST_DATABASE_URL"]
     engine = create_async_engine(url)

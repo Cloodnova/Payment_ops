@@ -49,8 +49,25 @@ def test_safe_info_never_exposes_secrets():
     assert "version" in info and "environment" in info and "ai_enabled" in info
 
 
+def test_release_version_and_build_metadata():
+    s = Settings()
+    assert s.app_version == "0.1.0-eval"
+    info = s.safe_info()
+    assert info["release"] == "v1 Evaluation Release"
+    assert info["version"] == "0.1.0-eval"
+    # Build metadata defaults are non-secret placeholders when not injected at build time.
+    assert info["build_sha"] == "unknown"
+    assert info["build_date"] == "unknown"
+
+
 def test_dsn_construction_without_leaking():
-    s = Settings(database_user="u", database_password="p", database_host="h")
+    s = Settings(
+        database_user="u",
+        database_password="p",
+        database_host="h",
+        database_port=5432,
+        database_name="paymentops",
+    )
     dsn = s.sqlalchemy_dsn()
     assert dsn.startswith("postgresql+psycopg2://u:p@h:5432/paymentops")
     # DSN is internal-only; never passed to safe_info.

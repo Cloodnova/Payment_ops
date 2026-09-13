@@ -198,6 +198,7 @@ def downgrade() -> None:
     op.drop_column("repair_candidates", "organization_id")
     op.drop_column("rule_findings", "organization_id")
     op.drop_column("analysis_runs", "organization_id")
+    op.drop_index("ix_payment_cases_idempotency_key", table_name="payment_cases")
     op.drop_column("payment_cases", "idempotency_key")
     op.drop_column("payment_cases", "status")
     op.drop_column("payment_cases", "address_provider_coverage")
@@ -205,5 +206,4 @@ def downgrade() -> None:
     op.drop_column("payment_cases", "integration_profile_version")
     op.drop_column("payment_cases", "mapping_version")
     op.drop_index("ix_payment_cases_organization_id", table_name="payment_cases")
-    op.drop_index("ix_payment_cases_idempotency_key", table_name="payment_cases")
     op.drop_column("payment_cases", "organization_id")

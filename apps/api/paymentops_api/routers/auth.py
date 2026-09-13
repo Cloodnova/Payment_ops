@@ -7,12 +7,14 @@ token is never logged. Sessions are revocable server-side.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paymentops_api.auth import AuthenticatedClient, get_api_client, get_db
-from paymentops_api.db.models import AppUser
+from paymentops_api.db.models import AppUser, AuditEvent
 from paymentops_api.services import user_service
 
 router = APIRouter(tags=["auth"])
@@ -53,6 +55,17 @@ async def login(
             detail="Invalid email or password.",
         ) from None
     token, expires_at = await user_service.create_session(session, user)
+    session.add(
+        AuditEvent(
+            organization_id=user.organization_id,
+            case_id=None,
+            event_type="auth.login",
+            user_identity=user.email,
+            action_metadata={"role": user.role},
+            created_at=datetime.now(UTC),
+        )
+    )
+    await session.commit()
     return {
         "session_token": token,
         "expires_at": expires_at.isoformat(),
@@ -78,4 +91,16 @@ async def logout(
     client: AuthenticatedClient = Depends(get_api_client),
     session: AsyncSession = Depends(get_db),
 ) -> None:
+    user = await user_service.resolve_session(session, x_session_token)
     await user_service.revoke_session(session, x_session_token)
+    if user is not None:
+        session.add(
+            AuditEvent(
+                organization_id=user.organization_id,
+                case_id=None,
+                event_type="auth.logout",
+                user_identity=user.email,
+                created_at=datetime.now(UTC),
+            )
+        )
+        await session.commit()

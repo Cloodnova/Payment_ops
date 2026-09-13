@@ -49,6 +49,12 @@ COPY --from=builder --chown=appuser:appgroup /build/schemas /srv/app/schemas
 # Point the XSD validator at the bundled schemas inside the image.
 ENV PAYMENTOPS_SCHEMA_DIR=/srv/app/schemas/iso20022
 
+# Non-sensitive build metadata surfaced by /api/v1/info.
+ARG BUILD_SHA=unknown
+ARG BUILD_DATE=unknown
+ENV BUILD_SHA=$BUILD_SHA \
+    BUILD_DATE=$BUILD_DATE
+
 USER appuser
 
 EXPOSE 8000

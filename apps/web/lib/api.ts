@@ -1,6 +1,9 @@
 export interface PlatformInfo {
   product: string;
+  release?: string;
   version: string;
+  build_sha?: string;
+  build_date?: string;
   environment: string;
   ai_enabled: boolean;
   ai_provider: string;

@@ -68,3 +68,36 @@ def load_fixture(name: str) -> bytes:
 
     path = Path(__file__).resolve().parent / "fixtures" / "pacs008" / f"{name}.xml"
     return path.read_bytes()
+
+
+@pytest.fixture(autouse=True)
+def _clean_database():
+    """Give every DB-backed test a clean slate.
+
+    The integration/security suites share one Postgres database and create their own engines,
+    so they cannot use transaction rollback fixtures. Instead we truncate all application
+    tables before each test. No-op when ``TEST_DATABASE_URL`` is unset (CI unit-only runs).
+    """
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url:
+        yield
+        return
+
+    import psycopg2
+
+    dsn = url.replace("postgresql+asyncpg://", "postgresql://")
+    conn = psycopg2.connect(dsn)
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT tablename FROM pg_tables "
+                "WHERE schemaname='public' AND tablename <> 'alembic_version'"
+            )
+            tables = [row[0] for row in cur.fetchall()]
+            if tables:
+                joined = ", ".join(f'"{t}"' for t in tables)
+                cur.execute(f"TRUNCATE {joined} RESTART IDENTITY CASCADE")  # noqa: S608
+    finally:
+        conn.close()
+    yield

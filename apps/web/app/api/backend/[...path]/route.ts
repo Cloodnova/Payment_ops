@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { requiredRole, roleSatisfies } from '@/lib/server/rbac';
 import {
   CSRF_COOKIE,
   SESSION_COOKIE,
@@ -60,6 +61,15 @@ async function proxy(
     return forbidden('Your account is not authorized for this workspace.');
   }
 
+  const { path } = await ctx.params;
+  const segments = path ?? [];
+
+  // Role-based authorization (enforced server-side; UI visibility is not authorization).
+  const required = requiredRole(request.method, segments);
+  if (!roleSatisfies(user.role, required)) {
+    return forbidden(`Your role (${user.role}) does not permit this action.`);
+  }
+
   // CSRF: mutating requests must echo the double-submit token.
   if (MUTATING_METHODS.has(request.method)) {
     const cookieToken = request.cookies.get(CSRF_COOKIE)?.value;
@@ -69,8 +79,7 @@ async function proxy(
     }
   }
 
-  const { path } = await ctx.params;
-  const suffix = (path ?? []).map(encodeURIComponent).join('/');
+  const suffix = segments.map(encodeURIComponent).join('/');
   const target = `${internalApiUrl()}/${suffix}${request.nextUrl.search}`;
 
   const outbound = new Headers();

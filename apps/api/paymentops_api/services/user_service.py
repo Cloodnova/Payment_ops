@@ -167,3 +167,32 @@ async def revoke_all_sessions(session: AsyncSession, user_id: str) -> int:
 
 async def get_organization(session: AsyncSession, organization_id: str) -> Organization | None:
     return await session.get(Organization, organization_id)
+
+
+async def list_users(session: AsyncSession, organization_id: str | None = None) -> list[AppUser]:
+    stmt = select(AppUser)
+    if organization_id:
+        stmt = stmt.where(AppUser.organization_id == organization_id)
+    result = await session.execute(stmt.order_by(AppUser.created_at))
+    return list(result.scalars().all())
+
+
+async def set_password(session: AsyncSession, user: AppUser, new_password: str) -> None:
+    """Set a new password, clear lockout, and revoke all existing sessions."""
+    user.password_hash = hash_password(new_password)
+    user.failed_login_count = 0
+    user.locked_until = None
+    await revoke_all_sessions(session, str(user.id))
+    await session.commit()
+
+
+async def set_status(session: AsyncSession, user: AppUser, status: UserStatus) -> None:
+    user.status = status.value
+    if status == UserStatus.DISABLED:
+        await revoke_all_sessions(session, str(user.id))
+    await session.commit()
+
+
+async def set_role(session: AsyncSession, user: AppUser, role: UserRole) -> None:
+    user.role = role.value
+    await session.commit()

@@ -41,7 +41,10 @@ export default function SettingsPage() {
             <div className="card-body">
               <ul className="status-list">
                 <li><span className="label">Product</span><span>{info.product}</span></li>
+                <li><span className="label">Release</span><span>{info.release ?? 'v1 Evaluation Release'}</span></li>
                 <li><span className="label">Version</span><span className="mono">{info.version}</span></li>
+                <li><span className="label">Build</span><span className="mono">{info.build_sha ? info.build_sha.slice(0, 12) : 'unknown'}</span></li>
+                <li><span className="label">Build date</span><span className="mono">{info.build_date ?? 'unknown'}</span></li>
                 <li><span className="label">Environment</span><span className={badgeClass(info.environment.toUpperCase())}>{info.environment}</span></li>
                 <li><span className="label">Zero retention</span><span>{info.zero_retention_enabled ? 'Enabled' : 'Disabled'}</span></li>
               </ul>

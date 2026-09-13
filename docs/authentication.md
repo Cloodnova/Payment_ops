@@ -76,6 +76,44 @@ python -m scripts.bootstrap_admin
 - Change the temporary password after first sign-in. There is no public self-service signup;
   users are provisioned by CloudNova (see the marketing repo's demo-request flow).
 
+## User administration
+
+Day-to-day account operations use `scripts.user_admin` (run inside the API container). Passwords
+are supplied via `PAYMENTOPS_USER_PASSWORD` (minimum 12 characters) and are never printed.
+
+```bash
+# create a user in an existing tenant
+PAYMENTOPS_USER_PASSWORD='<strong-password>' python -m scripts.user_admin create-user \
+    --email user@example.com --name "User" --org cloudnova-demo-bank --role OPERATOR
+
+# rotate a password (clears lockout and revokes all of the user's sessions)
+PAYMENTOPS_USER_PASSWORD='<strong-password>' python -m scripts.user_admin reset-password \
+    --email user@example.com
+
+python -m scripts.user_admin disable-user --email user@example.com   # also revokes sessions
+python -m scripts.user_admin enable-user  --email user@example.com
+python -m scripts.user_admin set-role     --email user@example.com --role ADMIN
+python -m scripts.user_admin revoke-sessions --email user@example.com
+python -m scripts.user_admin list-users
+```
+
+## Audit events
+
+Authentication events are recorded in `audit_events` with `case_id = NULL` and
+`event_type` `auth.login` / `auth.logout`, attributed to the user's email. No passwords or
+session tokens are ever written to the audit log.
+
+## Tests and the test database
+
+The integration/security suites require PostgreSQL and are skipped unless `TEST_DATABASE_URL`
+is set. An autouse fixture truncates all application tables before each test, so the suite is
+safe to run repeatedly against a dedicated (throwaway) database:
+
+```bash
+alembic upgrade head          # with DATABASE_* pointing at the throwaway DB
+TEST_DATABASE_URL='postgresql+asyncpg://.../paymentops_test' pytest
+```
+
 ## OIDC migration path
 
 The user/session model is intentionally small. Local login can be augmented or replaced by an

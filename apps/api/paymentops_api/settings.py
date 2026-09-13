@@ -40,7 +40,9 @@ class Settings(BaseSettings):
     )
 
     # --- General ---
-    app_version: str = Field(default="0.1.0", validate_default=True)
+    app_version: str = Field(default="0.1.0-eval", validate_default=True)
+    build_sha: str = "unknown"
+    build_date: str = "unknown"
     app_environment: AppEnvironment = AppEnvironment.DEVELOPMENT
     app_log_level: str = "INFO"
     app_debug: bool = False
@@ -137,7 +139,10 @@ class Settings(BaseSettings):
         """A minimal, non-secret view for /api/v1/info. Never include credentials."""
         return {
             "product": self.api_title,
+            "release": "v1 Evaluation Release",
             "version": self.app_version,
+            "build_sha": self.build_sha,
+            "build_date": self.build_date,
             "environment": self.environment,
             "ai_enabled": self.ai_enabled,
             "ai_provider": self.ai_provider.value if self.ai_enabled else "none",
