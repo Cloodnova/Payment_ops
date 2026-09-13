@@ -32,6 +32,20 @@ export const API_BASE =
 const ADMIN_CLIENT_ID = process.env.NEXT_PUBLIC_ADMIN_CLIENT_ID ?? '';
 const ADMIN_CLIENT_SECRET = process.env.NEXT_PUBLIC_ADMIN_CLIENT_SECRET ?? '';
 
+const REQUEST_TIMEOUT_MS = 30_000;
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 function authHeaders(): Record<string, string> {
   return {
     'X-Client-Id': ADMIN_CLIENT_ID,
@@ -41,15 +55,58 @@ function authHeaders(): Record<string, string> {
   };
 }
 
+// Map backend structured errors into user-friendly messages (never expose stack traces).
+function parseError(status: number, body: unknown): ApiError {
+  const detail =
+    typeof body === 'object' && body !== null
+      ? (body as { detail?: unknown; error?: { code?: string; message?: string } }).detail ??
+        (body as { error?: { code?: string; message?: string } }).error
+      : undefined;
+
+  if (typeof detail === 'string') {
+    return new ApiError(detail, status);
+  }
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: string; loc?: unknown[] } | undefined;
+    const msg = first?.msg ?? 'Validation error';
+    return new ApiError(msg, status);
+  }
+  if (typeof detail === 'object' && detail !== null) {
+    const e = detail as { code?: string; message?: string };
+    return new ApiError(e.message ?? `Request failed (${status})`, status, e.code);
+  }
+  if (status === 401) return new ApiError('Authentication failed. Check your credentials.', status);
+  if (status === 403) return new ApiError('You are not authorized for this resource.', status);
+  if (status === 404) return new ApiError('Resource not found.', status);
+  if (status === 422) return new ApiError('The request could not be processed.', status);
+  if (status === 413) return new ApiError('The payload is too large.', status);
+  return new ApiError(`Request failed (${status})`, status);
+}
+
 export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: { ...authHeaders(), ...(init?.headers ?? {}) },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      signal: init?.signal ?? controller.signal,
+      headers: { ...authHeaders(), ...(init?.headers ?? {}) },
+    });
+  } catch (e) {
+    clearTimeout(timeout);
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new ApiError('The request timed out. Please try again.', 408);
+    }
+    throw new ApiError('Unable to reach the PaymentOps API.', 0);
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body?.detail ?? `Request failed (${res.status})`);
+    throw parseError(res.status, body);
   }
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
@@ -78,8 +135,15 @@ export interface CaseSummary {
   case_id: string;
   status: string;
   message_type?: string;
+  message_version?: string;
+  validation_status?: string;
   address_readiness?: string;
   repair_status?: string;
+  address_provider_coverage?: string;
+  mapping_version?: string;
+  integration_profile_version?: string;
+  ruleset_version?: string;
+  created_at?: string | null;
 }
 
 export function listCases() {
@@ -156,11 +220,116 @@ export interface DashboardMetrics {
   open_cases: number;
   running_batches: number;
   top_findings: Record<string, number>;
+  account_entries?: number;
+  account_reconciled?: number;
+  missing_account_event?: number;
+  account_mismatches?: number;
+  unmatched_entries?: number;
+  duplicate_entries?: number;
+  reconciliation_rate?: number;
 }
 
 export function getDashboard() {
   return apiJson<DashboardMetrics>('/api/v1/dashboard');
 }
+
+// ---------------------------------------------------------------- profiles (full)
+
+export interface MappingField {
+  source: string;
+  target: string;
+  required?: string;
+  transforms?: string[];
+  default?: string | null;
+}
+
+export interface ProfileDetail extends Profile {
+  description?: string;
+  output_format?: string;
+  retention_policy?: string;
+  address_policy?: string;
+  ai_policy?: string;
+  allowed_messages?: string[];
+  version_number?: number;
+  created_at?: string;
+  updated_at?: string;
+  published_at?: string | null;
+  mapping?: {
+    mapping_version: string;
+    source_format: string;
+    record_selector?: string | null;
+    fields: MappingField[];
+  };
+  rules?: { rule_id: string; severity?: string; field?: string; description?: string }[];
+}
+
+export function getProfile(id: string) {
+  return apiJson<ProfileDetail>(`/api/v1/integration-profiles/${id}`);
+}
+
+export function getProfileVersions(id: string) {
+  return apiJson<{ version_number: number; name: string; input_format: string; mapping_version: string; ruleset_version: string; published_at: string }[]>(
+    `/api/v1/integration-profiles/${id}/versions`,
+  );
+}
+
+export function validateProfile(id: string) {
+  return apiJson<{ valid: boolean; errors?: { code: string; message: string }[] }>(
+    `/api/v1/integration-profiles/${id}/validate`,
+    { method: 'POST' },
+  );
+}
+
+export function testProfile(id: string, payload: string) {
+  return apiJson<Record<string, unknown>>(`/api/v1/integration-profiles/${id}/test`, {
+    method: 'POST',
+    body: JSON.stringify({ payload }),
+  });
+}
+
+// ---------------------------------------------------------------- audit
+
+export interface AuditEvent {
+  id: string;
+  timestamp?: string | null;
+  actor?: string | null;
+  event: string;
+  resource?: string | null;
+  case_id?: string | null;
+  profile_version?: string | null;
+  result?: string | null;
+}
+
+export function listAuditEvents(params: { limit?: number; case_id?: string } = {}) {
+  const q = new URLSearchParams();
+  if (params.limit) q.set('limit', String(params.limit));
+  if (params.case_id) q.set('case_id', params.case_id);
+  return apiJson<AuditEvent[]>(`/api/v1/audit?${q.toString()}`);
+}
+
+// ---------------------------------------------------------------- api clients
+
+export interface ApiClientSummary {
+  client_id: string;
+  organization_id: string;
+  allowed_profiles: string[];
+  status: string;
+  created_at?: string | null;
+  last_used_at?: string | null;
+}
+
+export function listApiClients() {
+  return apiJson<ApiClientSummary[]>('/api/v1/clients');
+}
+
+export function createApiClient(organizationId: string, allowedProfiles: string[] = []) {
+  return apiJson<{ client_id: string; secret: string; organization_id: string }>('/api/v1/clients', {
+    method: 'POST',
+    body: JSON.stringify({ organization_id: organizationId, allowed_profiles: allowedProfiles }),
+  });
+}
+
+// ---------------------------------------------------------------- lifecycles (list)
 
 export function analyzeProfile(profileId: string, payload: string, opts: { repair?: boolean; idempotencyKey?: string } = {}) {
   return apiJson<Record<string, unknown>>(`/api/v1/integrations/${profileId}/analyze`, {
@@ -341,6 +510,10 @@ export interface IsoAnalysisResult {
   lifecycle_events?: Record<string, unknown>[];
   raw_status?: string | null;
   normalized_status?: string | null;
+  account_report_type?: string | null;
+  account_report_ids?: string[];
+  account_entry_count?: number;
+  account_reconciliation?: Record<string, unknown>[];
   warnings?: string[];
 }
 

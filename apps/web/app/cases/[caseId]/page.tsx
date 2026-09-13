@@ -1,23 +1,28 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { AlertTriangle, ArrowLeft, ShieldCheck } from 'lucide-react';
 import AppShell from '@/components/AppShell';
+import { Button, Card, CardHead, EmptyState, ErrorState, Notice, PageHeader, Skeleton } from '@/components/ui';
 import { caseAction, getCase, type CaseDetail } from '@/lib/api';
+import { badgeClass, formatDateTime, labelize } from '@/lib/status';
 
-export default function CaseReviewPage() {
+export default function CaseDetailPage() {
   const { caseId } = useParams<{ caseId: string }>();
   const [detail, setDetail] = useState<CaseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setDetail(await getCase(caseId));
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'failed to load');
+      setError(e instanceof Error ? e.message : 'Unable to load case');
     }
   }, [caseId]);
 
@@ -27,89 +32,127 @@ export default function CaseReviewPage() {
 
   const act = async (action: string) => {
     setBusy(true);
-    setError(null);
+    setActionError(null);
     try {
-      const r = await caseAction(caseId, action, note || undefined);
-      setDetail({ ...(detail as CaseDetail), status: r.status });
+      await caseAction(caseId, action, note || undefined);
       setNote('');
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'action failed');
+      setActionError(e instanceof Error ? e.message : 'Action failed');
     } finally {
       setBusy(false);
     }
   };
 
   const finished = detail ? ['APPROVED', 'REJECTED', 'CLOSED'].includes(detail.status) : false;
-  const row = (k: string, v: string | number | null | undefined) => (
-    <li><span>{k}</span><span>{v ?? '—'}</span></li>
-  );
 
   return (
-    <AppShell active="cases">
-      <div className="card">
-        <div style={{ border: '1px solid #ecd9ae', background: '#fdf6e7', padding: '0.6rem 0.8rem', borderRadius: 'var(--cn-radius)', marginBottom: '1rem' }}>
-          {detail?.disclaimer ?? 'Approval in PaymentOps approves the data-repair candidate only. It does not authorize, release, settle, or execute the payment.'}
-        </div>
-        <h2>Case {caseId.slice(0, 16)}</h2>
-        {error && <p className="muted" style={{ color: 'var(--cn-danger)' }}>{error}</p>}
-        <ul className="status-list">
-          {row('State', detail?.status)}
-          {row('Profile', detail?.profile_id)}
-          {row('Profile version', detail?.integration_profile_version)}
-          {row('Mapping version', detail?.mapping_version)}
-          {row('Ruleset version', detail?.ruleset_version)}
-          {row('Message type', detail?.message_type)}
-          {row('Provider', detail?.address_provider)}
-          {row('Coverage', detail?.address_provider_coverage)}
-          {row('Readiness', detail?.address_readiness)}
-          {row('Repair status', detail?.repair_status)}
-        </ul>
-      </div>
+    <AppShell>
+      <PageHeader
+        eyebrow={`Case / ${caseId}`}
+        title={detail?.message_type ? `${detail.message_type} analysis` : 'Case investigation'}
+        description={detail ? `${labelize(detail.status)} · profile v${detail.integration_profile_version ?? '—'} · mapping ${detail.mapping_version ?? '—'}` : undefined}
+        actions={<Link href="/cases" className="btn btn-ghost"><ArrowLeft size={14} /> All cases</Link>}
+      />
 
-      <div className="grid-2">
-        <div className="card">
-          <h2>Rule findings</h2>
-          <ul className="status-list">
-            {(detail?.findings ?? []).map((f, i) => (
-              <li key={i}>
-                <span><strong>{f.rule_id}</strong> · {f.message}</span>
-                <span className="badge badge-warn">{f.severity}</span>
-              </li>
-            ))}
-            {(detail?.findings ?? []).length === 0 && <li className="muted">No findings.</li>}
-          </ul>
-        </div>
-        <div className="card">
-          <h2>Audit timeline</h2>
-          <ul className="status-list">
-            {(detail?.audit ?? []).map((a, i) => (
-              <li key={i}>
-                <span>{a.event}</span>
-                <span className="muted small">{a.actor ?? 'system'} · {a.timestamp ? new Date(a.timestamp).toLocaleString() : '—'}</span>
-              </li>
-            ))}
-            {(detail?.audit ?? []).length === 0 && <li className="muted">No audit events.</li>}
-          </ul>
-        </div>
-      </div>
+      {error ? <ErrorState message={error} onRetry={load} /> : null}
 
-      <div className="card">
-        <h2>Operator actions</h2>
-        <div className="stack">
-          <label>
-            <span className="field-label">Note</span>
-            <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note" />
-          </label>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button className="btn" onClick={() => act('approve')} disabled={busy || finished}>Approve Repair Candidate</button>
-            <button className="btn btn-ghost" onClick={() => act('reject')} disabled={busy || finished}>Reject</button>
-            <button className="btn btn-ghost" onClick={() => act('close')} disabled={busy || finished}>Close</button>
+      {!detail && !error ? <Card><Skeleton lines={5} /></Card> : null}
+
+      {detail ? (
+        <>
+          <Notice tone="accent">
+            <ShieldCheck size={15} aria-hidden="true" />
+            <span>
+              <strong>Analysis only.</strong> Approval in PaymentOps approves an analytical/data-repair decision only.
+              It does not authorize or execute a payment.
+            </span>
+          </Notice>
+
+          <div className="grid-sidebar">
+            <div className="stack">
+              <Card>
+                <CardHead title="Summary" sub="Case metadata and validation state" actions={<span className={badgeClass(detail.status)}>{labelize(detail.status)}</span>} />
+                <div className="card-body">
+                  <ul className="status-list">
+                    <li><span className="label">Validation</span><span className={badgeClass(detail.validation_status)}>{labelize(detail.validation_status)}</span></li>
+                    <li><span className="label">Address readiness</span><span className={badgeClass(detail.address_readiness)}>{labelize(detail.address_readiness)}</span></li>
+                    <li><span className="label">Repair status</span><span>{labelize(detail.repair_status)}</span></li>
+                    <li><span className="label">Address provider</span><span>{detail.address_provider ?? '—'} {detail.address_provider_coverage ? `(${detail.address_provider_coverage})` : ''}</span></li>
+                    <li><span className="label">Ruleset version</span><span className="mono">{detail.ruleset_version ?? '—'}</span></li>
+                    <li><span className="label">Mapping version</span><span className="mono">{detail.mapping_version ?? '—'}</span></li>
+                    <li><span className="label">Engine version</span><span className="mono">{detail.engine_version ?? '—'}</span></li>
+                    <li><span className="label">Input hash</span><span className="mono">{detail.input_hash ? `${detail.input_hash.slice(0, 16)}…` : '—'}</span></li>
+                  </ul>
+                </div>
+              </Card>
+
+              <Card>
+                <CardHead title="Rule findings" sub="Deterministic findings against the source payload" />
+                <div className="card-body">
+                  {(detail.findings ?? []).length === 0 ? (
+                    <EmptyState title="No rule findings" message="No deterministic rule findings were recorded for this case." />
+                  ) : (
+                    <ul className="status-list">
+                      {(detail.findings ?? []).map((f, i) => (
+                        <li key={`${f.rule_id}-${i}`}>
+                          <span>
+                            <strong className="mono">{f.rule_id}</strong> · {f.message}
+                          </span>
+                          <span className={badgeClass(f.severity)}>{labelize(f.severity)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </Card>
+
+              <Card>
+                <CardHead title="Audit timeline" sub="Append-oriented record of case events" />
+                <div className="card-body">
+                  {(detail.audit ?? []).length === 0 ? (
+                    <EmptyState title="No audit events" />
+                  ) : (
+                    <div className="timeline">
+                      {(detail.audit ?? []).map((a, i) => (
+                        <div className="timeline-item" key={i}>
+                          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.8rem' }}>{labelize(a.event)}</p>
+                          <p className="muted small" style={{ margin: '0.2rem 0 0' }}>
+                            {a.actor ?? 'system'} · {formatDateTime(a.timestamp)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </div>
+
+            <div className="stack">
+              <Card>
+                <CardHead title="Operator actions" sub="Decisions are analytical and audited" />
+                <div className="card-body">
+                  <label>
+                    <span className="field-label">Note (optional)</span>
+                    <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note for the audit trail" />
+                  </label>
+                  {actionError ? <p className="small" style={{ color: 'var(--cn-danger)' }} role="alert">{actionError}</p> : null}
+                  <div className="stack" style={{ marginTop: '1rem' }}>
+                    <Button onClick={() => act('approve')} disabled={busy || finished}>Approve repair candidate</Button>
+                    <Button variant="ghost" onClick={() => act('reject')} disabled={busy || finished}>Reject</Button>
+                    <Button variant="ghost" onClick={() => act('close')} disabled={busy || finished}>Close case</Button>
+                  </div>
+                  {finished ? (
+                    <p className="muted small" style={{ marginTop: '0.75rem' }}>
+                      <AlertTriangle size={13} aria-hidden="true" /> Case is {labelize(detail.status)}. Actions are disabled.
+                    </p>
+                  ) : null}
+                </div>
+              </Card>
+            </div>
           </div>
-          {busy && <p className="muted small">Processing…</p>}
-          {finished && <p className="muted small">Case is {detail?.status}. Action buttons disabled to prevent accidental double actions.</p>}
-        </div>
-      </div>
+        </>
+      ) : null}
     </AppShell>
   );
 }

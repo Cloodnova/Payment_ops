@@ -37,10 +37,15 @@ async def list_cases(
             "case_id": c.case_id,
             "status": c.status,
             "message_type": c.message_type,
+            "message_version": c.message_version,
             "validation_status": c.validation_status,
             "address_readiness": c.address_readiness,
             "repair_status": c.repair_status,
             "address_provider_coverage": c.address_provider_coverage,
+            "mapping_version": c.mapping_version,
+            "integration_profile_version": c.integration_profile_version,
+            "ruleset_version": c.ruleset_version,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
         }
         for c in result.scalars().all()
     ]

@@ -19,6 +19,7 @@ from paymentops_api.observability import MetricAddressProvider
 from paymentops_api.routers import (
     account,
     analyze,
+    audit,
     batches,
     cases,
     clients,
@@ -135,6 +136,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(matching.router)
     app.include_router(iso.router)
     app.include_router(account.router)
+    app.include_router(audit.router)
 
     # Attach the analysis pipeline (deterministic engines) so routes can use it.
     provider = build_address_provider(settings)

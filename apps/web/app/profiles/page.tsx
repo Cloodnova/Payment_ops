@@ -1,92 +1,71 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { ArrowRight, GitBranch } from 'lucide-react';
 import AppShell from '@/components/AppShell';
-import { createProfile, listProfiles, publishProfile, type Profile } from '@/lib/api';
+import { Card, EmptyState, ErrorState, PageHeader, Skeleton } from '@/components/ui';
+import { listProfiles, type Profile } from '@/lib/api';
+import { badgeClass, labelize } from '@/lib/status';
 
 export default function ProfilesPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [name, setName] = useState('');
-  const [inputFormat, setInputFormat] = useState('JSON');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
       setProfiles(await listProfiles());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'failed to load');
+      setError(e instanceof Error ? e.message : 'Unable to load profiles');
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
-
-  const create = async () => {
-    if (!name) return;
-    try {
-      await createProfile({ name, input_format: inputFormat });
-      setName('');
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'create failed');
-    }
-  };
-
-  const publish = async (id?: string) => {
-    if (!id) return;
-    try {
-      await publishProfile(id);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'publish failed');
-    }
-  };
+  }, [load]);
 
   return (
-    <AppShell active="profiles">
-      <div className="card">
-        <h2>Integration Profiles</h2>
-        <p className="muted small">
-          Define how customer input maps to the canonical payment model. Published profiles are immutable.
-        </p>
-        <div className="stack">
-          <div className="grid-2">
-            <label>
-              <span className="field-label">Name</span>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Bank A JSON" />
-            </label>
-            <label>
-              <span className="field-label">Input format</span>
-              <select value={inputFormat} onChange={(e) => setInputFormat(e.target.value)}>
-                <option>JSON</option>
-                <option>CSV</option>
-                <option>CUSTOM_XML</option>
-                <option>ISO20022_XML</option>
-              </select>
-            </label>
-          </div>
-          <button className="btn" onClick={create}>Create draft</button>
-          {error && <p className="muted" style={{ color: 'var(--cn-danger)' }}>{error}</p>}
-        </div>
-      </div>
+    <AppShell>
+      <PageHeader
+        eyebrow="Configuration"
+        title="Integration profiles"
+        description="Published contracts that map source payloads to canonical payment data and a governed ruleset."
+      />
 
-      <div className="card">
-        <h2>Profiles</h2>
-        <ul className="status-list">
+      {error ? <ErrorState message={error} onRetry={load} /> : null}
+
+      {loading ? (
+        <Card><Skeleton lines={3} /></Card>
+      ) : profiles.length === 0 ? (
+        <Card><EmptyState title="No integration profiles" message="Create a profile to begin ingesting payment data." /></Card>
+      ) : (
+        <div className="metric-grid">
           {profiles.map((p) => (
-            <li key={p.id}>
-              <span>
-                <strong>{p.name}</strong> · {p.input_format} · v{p.version_number ?? 1} ·{' '}
-                <span className="badge badge-muted">{p.status ?? 'DRAFT'}</span>
-              </span>
-              <button className="btn btn-ghost" onClick={() => publish(p.id)}>Publish</button>
-            </li>
+            <Card key={p.id}>
+              <div className="row-between">
+                <span className="metric-icon" aria-hidden="true"><GitBranch size={17} /></span>
+                <span className={badgeClass(p.status)}>{labelize(p.status)}</span>
+              </div>
+              <Link href={`/profiles/${p.id}`} className="display" style={{ display: 'block', marginTop: '1rem', fontSize: '1rem', fontWeight: 600 }}>
+                {p.name}
+              </Link>
+              <p className="muted small" style={{ marginTop: '0.25rem' }}>{p.description || 'No description'}</p>
+              <ul className="status-list" style={{ marginTop: '0.75rem' }}>
+                <li><span className="label">Input format</span><span className="mono">{p.input_format}</span></li>
+                <li><span className="label">Version</span><span className="mono">v{p.version_number ?? 1}</span></li>
+              </ul>
+              <Link href={`/profiles/${p.id}`} className="row small" style={{ marginTop: '0.75rem', gap: '0.35rem' }}>
+                Open profile <ArrowRight size={13} aria-hidden="true" />
+              </Link>
+            </Card>
           ))}
-          {profiles.length === 0 && <li className="muted">No profiles yet.</li>}
-        </ul>
-      </div>
+        </div>
+      )}
     </AppShell>
   );
 }

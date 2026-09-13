@@ -1,51 +1,96 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Database, Plus } from 'lucide-react';
 import AppShell from '@/components/AppShell';
+import { Button, Card, CardHead, EmptyState, ErrorState, PageHeader, Skeleton, TableWrap } from '@/components/ui';
 import { listBatches, type BatchJobSummary } from '@/lib/api';
+import { badgeClass, formatDateTime, labelize } from '@/lib/status';
 
 export default function BatchesPage() {
   const [batches, setBatches] = useState<BatchJobSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
       setBatches(await listBatches());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'failed to load');
+      setError(e instanceof Error ? e.message : 'Unable to load batches');
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   return (
-    <AppShell active="batches">
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2>Batch jobs</h2>
-          <Link href="/batches/new" className="btn">New batch</Link>
-        </div>
-        {error && <p className="muted" style={{ color: 'var(--cn-danger)' }}>{error}</p>}
-      </div>
-      <div className="card">
-        <ul className="status-list">
-          {batches.map((b) => (
-            <li key={b.job_id}>
-              <span>
-                <Link href={`/batches/${b.job_id}`}>{b.job_id.slice(0, 12)}</Link> · {b.status} · {b.processed_records}/{b.total_records} processed
-              </span>
-              <span className="badge badge-muted">
-                R:{b.ready_count} RP:{b.repairable_count} RV:{b.review_required_count} F:{b.failed_count}
-              </span>
-            </li>
-          ))}
-          {batches.length === 0 && <li className="muted">No batch jobs yet.</li>}
-        </ul>
-      </div>
+    <AppShell>
+      <PageHeader
+        eyebrow="Batch analysis"
+        title="Batches"
+        description="Monitor file-based analysis jobs and inspect aggregate readiness with record-level traceability."
+        actions={<Link href="/batches/new" className="btn"><Plus size={14} /> New batch</Link>}
+      />
+
+      {error ? <ErrorState message={error} onRetry={load} /> : null}
+
+      <Card noPad>
+        <CardHead title="Batch jobs" sub="Files submitted to PaymentOps" actions={<Button variant="ghost" size="sm" onClick={load}>Refresh</Button>} />
+        {loading ? (
+          <div style={{ padding: '1.25rem' }}><Skeleton lines={4} /></div>
+        ) : batches.length === 0 ? (
+          <EmptyState title="No batch jobs yet" message="Submit a CSV batch to begin." />
+        ) : (
+          <TableWrap>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Batch</th>
+                  <th>Status</th>
+                  <th>Progress</th>
+                  <th>Ready</th>
+                  <th>Repairable</th>
+                  <th>Review</th>
+                  <th>Failed</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batches.map((b) => {
+                  const pct = b.total_records ? Math.round((b.processed_records / b.total_records) * 100) : 0;
+                  return (
+                    <tr key={b.job_id}>
+                      <td>
+                        <Link href={`/batches/${b.job_id}`} className="row" style={{ gap: '0.5rem' }}>
+                          <Database size={14} aria-hidden="true" /> <span className="mono">{b.job_id.slice(0, 12)}</span>
+                        </Link>
+                      </td>
+                      <td><span className={badgeClass(b.status)}>{labelize(b.status)}</span></td>
+                      <td style={{ minWidth: '9rem' }}>
+                        <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                          <span style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="muted small">{b.processed_records}/{b.total_records} ({pct}%)</span>
+                      </td>
+                      <td>{b.ready_count}</td>
+                      <td>{b.repairable_count}</td>
+                      <td>{b.review_required_count}</td>
+                      <td>{b.failed_count}</td>
+                      <td className="muted small">{formatDateTime(b.created_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+      </Card>
     </AppShell>
   );
 }

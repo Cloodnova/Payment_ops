@@ -1,18 +1,13 @@
 'use client';
 
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
-import {
-  evaluateMatch,
-  searchCandidates,
-  type CandidateMatch,
-  type FieldMatchResult,
-  type MatchDecision,
-  type MatchRecord,
-} from '@/lib/api';
+import { Button, Card, CardHead, EmptyState, ErrorState, Notice, PageHeader, TableWrap } from '@/components/ui';
+import { evaluateMatch, searchCandidates, type CandidateMatch, type MatchDecision, type MatchRecord } from '@/lib/api';
+import { badgeClass, labelize } from '@/lib/status';
 
-const empty = (): MatchRecord => ({
+const EMPTY: MatchRecord = {
   record_id: '',
   record_type: 'PAYMENT',
   organization_id: '',
@@ -22,160 +17,140 @@ const empty = (): MatchRecord => ({
   creditor_name: '',
   value_date: '',
   debtor_account: '',
-});
+};
 
 export default function MatchingPage() {
-  const [a, setA] = useState<MatchRecord>(empty());
-  const [b, setB] = useState<MatchRecord>(empty());
+  const [a, setA] = useState<MatchRecord>({ ...EMPTY, record_id: 'source-1', record_type: 'INVOICE' });
+  const [b, setB] = useState<MatchRecord>({ ...EMPTY, record_id: 'candidate-1', record_type: 'PAYMENT' });
   const [decision, setDecision] = useState<MatchDecision | null>(null);
   const [candidates, setCandidates] = useState<CandidateMatch[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const patch = (set: Dispatch<SetStateAction<MatchRecord>>, field: keyof MatchRecord, value: string) => {
-    set((r) => ({ ...r, [field]: value }));
-  };
-
-  const onEvaluate = async () => {
+  const run = async (mode: 'evaluate' | 'candidates') => {
     setBusy(true);
     setError(null);
     try {
-      const d = await evaluateMatch({ record_a: a, record_b: b });
-      setDecision(d);
-      setCandidates([]);
+      if (mode === 'evaluate') {
+        setDecision(await evaluateMatch({ record_a: a, record_b: b }));
+        setCandidates([]);
+      } else {
+        setCandidates(await searchCandidates(a));
+        setDecision(null);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'evaluate failed');
+      setError(e instanceof Error ? e.message : 'Request failed');
     } finally {
       setBusy(false);
     }
   };
 
-  const onSearch = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      setCandidates(await searchCandidates(a));
-      setDecision(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'search failed');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const recordFields: { key: keyof MatchRecord; label: string }[] = [
-    { key: 'record_id', label: 'Record ID' },
-    { key: 'record_type', label: 'Type' },
-    { key: 'amount', label: 'Amount' },
-    { key: 'currency', label: 'Currency' },
-    { key: 'remittance_reference', label: 'Reference' },
-    { key: 'creditor_name', label: 'Creditor' },
-    { key: 'value_date', label: 'Value Date' },
-    { key: 'debtor_account', label: 'Debtor Account' },
-  ];
-
-  const recordForm = (label: string, r: MatchRecord, set: Dispatch<SetStateAction<MatchRecord>>) => (
-    <div className="card">
-      <h2>{label}</h2>
-      <div className="stack">
-        {recordFields.map((f) => (
-          <label key={f.key}>
-            <span className="field-label">{f.label}</span>
-            <input
-              type="text"
-              value={(r[f.key] as string) ?? ''}
-              onChange={(e) => patch(set, f.key, e.target.value)}
-            />
+  const recordForm = (label: string, r: MatchRecord, set: (v: MatchRecord) => void) => (
+    <Card>
+      <CardHead title={label} />
+      <div className="card-body">
+        <div className="stack">
+          <label><span className="field-label">Record ID</span><input type="text" value={r.record_id} onChange={(e) => set({ ...r, record_id: e.target.value })} /></label>
+          <label><span className="field-label">Type</span>
+            <select value={r.record_type} onChange={(e) => set({ ...r, record_type: e.target.value })}>
+              {['PAYMENT', 'EXPECTED_PAYMENT', 'INVOICE', 'LEDGER_ENTRY', 'ACCOUNT_EVENT'].map((t) => <option key={t}>{t}</option>)}
+            </select>
           </label>
-        ))}
+          <label><span className="field-label">Amount</span><input type="text" value={String(r.amount ?? '')} onChange={(e) => set({ ...r, amount: e.target.value })} /></label>
+          <label><span className="field-label">Currency</span><input type="text" value={r.currency ?? ''} onChange={(e) => set({ ...r, currency: e.target.value })} /></label>
+          <label><span className="field-label">End-to-end ID</span><input type="text" value={r.end_to_end_id ?? ''} onChange={(e) => set({ ...r, end_to_end_id: e.target.value })} /></label>
+          <label><span className="field-label">Transaction ID</span><input type="text" value={r.transaction_id ?? ''} onChange={(e) => set({ ...r, transaction_id: e.target.value })} /></label>
+          <label><span className="field-label">Reference</span><input type="text" value={r.remittance_reference ?? ''} onChange={(e) => set({ ...r, remittance_reference: e.target.value })} /></label>
+          <label><span className="field-label">Creditor name</span><input type="text" value={r.creditor_name ?? ''} onChange={(e) => set({ ...r, creditor_name: e.target.value })} /></label>
+        </div>
       </div>
-    </div>
+    </Card>
   );
 
   return (
-    <AppShell active="matching">
-      <div className="card">
-        <h2>Matching</h2>
-        <p className="muted small">
-          Deterministic matching intelligence. A CONFIRMED match is a reconciliation decision
-          only — it never executes or settles a payment.
-        </p>
-        {error && <p className="muted" style={{ color: 'var(--cn-danger)' }}>{error}</p>}
-      </div>
+    <AppShell>
+      <PageHeader
+        eyebrow="Reconciliation intelligence"
+        title="Matching"
+        description="Deterministic matching intelligence. A confirmed match is a reconciliation decision only — it never executes or settles a payment."
+      />
+
+      {error ? <ErrorState message={error} /> : null}
 
       <div className="grid-2">
-        {recordForm('Source Record', a, setA)}
-        {recordForm('Candidate Record', b, setB)}
+        {recordForm('Source record', a, setA)}
+        {recordForm('Candidate record', b, setB)}
       </div>
 
-      <div className="card">
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn" onClick={onEvaluate} disabled={busy}>Evaluate pair</button>
-          <button className="btn btn-ghost" onClick={onSearch} disabled={busy}>Search candidates</button>
-          <Link href="/reconciliation" className="btn btn-ghost">Reconciliation</Link>
+      <Card>
+        <div className="card-body row">
+          <Button onClick={() => run('evaluate')} disabled={busy}>Evaluate pair</Button>
+          <Button variant="ghost" onClick={() => run('candidates')} disabled={busy}>Search candidates</Button>
+          <Link href="/reconciliation" className="btn btn-ghost">Reconciliation runs</Link>
         </div>
-      </div>
+      </Card>
 
-      {decision && (
-        <div className="card">
-          <h2>Decision</h2>
-          <div className="status-list">
-            <li><span>Classification</span><span className="badge badge-warn">{decision.classification}</span></li>
-            <li><span>Match score</span><span>{decision.match_score}</span></li>
-            <li><span>Policy / engine</span><span>{decision.policy_version} / {decision.engine_version}</span></li>
+      {decision ? (
+        <Card>
+          <CardHead
+            title="Decision"
+            sub="match_score is a deterministic score, not a probability"
+            actions={<span className={badgeClass(decision.classification)}>{labelize(decision.classification)}</span>}
+          />
+          <div className="card-body">
+            <ul className="status-list">
+              <li><span className="label">Match score (deterministic)</span><span className="mono">{decision.match_score}</span></li>
+              <li><span className="label">Policy / engine</span><span className="mono">{decision.policy_version} / {decision.engine_version}</span></li>
+            </ul>
+            {decision.critical_conflicts.length > 0 ? (
+              <Notice tone="danger">
+                Critical conflicts: {decision.critical_conflicts.map((c) => c.field).join(', ')}
+              </Notice>
+            ) : null}
+            <TableWrap>
+              <table className="data">
+                <thead><tr><th>Field</th><th>Similarity</th><th>Weight</th><th>Status</th><th>Explanation</th></tr></thead>
+                <tbody>
+                  {decision.field_results.map((f) => (
+                    <tr key={f.field}>
+                      <td className="mono">{f.field}</td>
+                      <td>{f.similarity}</td>
+                      <td>{f.weight}</td>
+                      <td><span className={badgeClass(f.status)}>{labelize(f.status)}</span></td>
+                      <td className="mono muted">{f.explanation_code ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
           </div>
-          <h3>Critical conflicts</h3>
-          {decision.critical_conflicts.length === 0 && <p className="muted small">None.</p>}
-          <ul className="status-list">
-            {decision.critical_conflicts.map((c) => (
-              <li key={c.field}><span>{c.field}</span><span className="badge badge-muted">{c.code}</span></li>
-            ))}
-          </ul>
-          <h3>Field results</h3>
-          <FieldTable rows={decision.field_results} />
-        </div>
-      )}
+        </Card>
+      ) : null}
 
-      {candidates.length > 0 && (
-        <div className="card">
-          <h2>Ranked candidates</h2>
-          <ul className="status-list">
-            {candidates.map((c) => (
-              <li key={c.candidate_id}>
-                <span>
-                  {c.candidate_id.slice(0, 16)} · score {c.match_score} · <strong>{c.classification}</strong>
-                </span>
-                <span className="badge badge-muted">{c.critical_conflicts.length} conflicts</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {candidates.length > 0 ? (
+        <Card>
+          <CardHead title="Ranked candidates" sub="Ordered by deterministic score" />
+          <TableWrap>
+            <table className="data">
+              <thead><tr><th>Candidate</th><th>Score</th><th>Classification</th><th>Conflicts</th></tr></thead>
+              <tbody>
+                {candidates.map((c) => (
+                  <tr key={c.candidate_id}>
+                    <td className="mono">{c.candidate_id}</td>
+                    <td>{c.match_score}</td>
+                    <td><span className={badgeClass(c.classification)}>{labelize(c.classification)}</span></td>
+                    <td>{c.critical_conflicts.length}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        </Card>
+      ) : null}
+
+      {!decision && candidates.length === 0 ? (
+        <Card><EmptyState title="No evaluation yet" message="Enter two records and evaluate, or search candidates for the source record." /></Card>
+      ) : null}
     </AppShell>
-  );
-}
-
-function FieldTable({ rows }: { rows: FieldMatchResult[] }) {
-  return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-      <thead>
-        <tr>
-          {['Field', 'Similarity', 'Weight', 'Status', 'Code'].map((h) => (
-            <th key={h} style={{ textAlign: 'left', borderBottom: '1px solid var(--cn-border)' }}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.field}>
-            <td style={{ padding: '0.25rem', borderBottom: '1px solid var(--cn-border)' }}>{r.field}</td>
-            <td style={{ padding: '0.25rem', borderBottom: '1px solid var(--cn-border)' }}>{r.similarity}</td>
-            <td style={{ padding: '0.25rem', borderBottom: '1px solid var(--cn-border)' }}>{r.weight}</td>
-            <td style={{ padding: '0.25rem', borderBottom: '1px solid var(--cn-border)' }}>{r.status}</td>
-            <td style={{ padding: '0.25rem', borderBottom: '1px solid var(--cn-border)' }}>{r.explanation_code ?? '—'}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
