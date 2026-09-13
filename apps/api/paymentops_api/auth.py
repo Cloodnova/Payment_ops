@@ -100,3 +100,17 @@ async def get_optional_api_client(
         x_client_secret=x_client_secret,
         session=session,
     )
+
+
+async def get_actor_identity(
+    x_actor_identity: str | None = Header(default=None, alias="X-Actor-Identity"),
+) -> str | None:
+    """Trusted, internally-generated actor identity for audit.
+
+    The public browser cannot reach the backend directly; the Next.js web server strips any
+    inbound ``X-Actor-Identity`` and sets it from the validated session. Callers must never
+    trust an actor identity supplied by the browser in a request body.
+    """
+    if x_actor_identity is None:
+        return None
+    return x_actor_identity.strip()[:128] or None

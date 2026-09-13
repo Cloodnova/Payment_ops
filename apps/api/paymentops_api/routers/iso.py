@@ -13,7 +13,7 @@ from analysis.models import IsoAnalysisResult
 from analysis.pipeline import AnalysisPipeline
 from iso_engine.registry import IsoMessageRegistry, UnsupportedMessageError
 from iso_engine.xml_errors import XmlError
-from paymentops_api.auth import AuthenticatedClient, get_api_client, get_db
+from paymentops_api.auth import AuthenticatedClient, get_actor_identity, get_api_client, get_db
 from paymentops_api.db.models import (
     IsoMessage,
     MessageCorrelation,
@@ -145,6 +145,7 @@ async def decide_correlation(
     correlation_id: str,
     body: DecideCorrelationRequest,
     client: AuthenticatedClient = Depends(get_api_client),
+    actor: str | None = Depends(get_actor_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     try:
@@ -153,7 +154,7 @@ async def decide_correlation(
             client.organization_id,
             correlation_id,
             body.action,
-            operator=body.operator,
+            operator=actor or body.operator,
             note=body.note,
         )
     except LookupError:

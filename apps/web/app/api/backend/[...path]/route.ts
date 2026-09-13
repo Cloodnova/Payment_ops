@@ -1,22 +1,26 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import {
+  CSRF_COOKIE,
+  SESSION_COOKIE,
+  internalApiUrl,
+  isAuthorizedTenant,
+  operatorHeaders,
+  validateSessionToken,
+} from '@/lib/server/session';
 
-// Same-origin API proxy.
+// Authenticated same-origin API proxy.
 //
-//   Browser -> https://<public-host>/api/backend/*  (same origin)
-//           -> this route handler (server-side, Next.js)
-//           -> PAYMENTOPS_INTERNAL_API_URL/*        (cluster-internal)
+//   Browser (session cookie) -> /api/backend/*  (same origin)
+//     -> session validated against the backend
+//     -> operator credential + trusted actor identity injected server-side
+//     -> PAYMENTOPS_INTERNAL_API_URL/*
 //
-// The browser never learns the internal Kubernetes service URL or the operator
-// credentials. Credentials are injected server-side and are never returned to the client.
+// Anonymous callers receive 401 and never reach the backend. The browser never learns the
+// internal service URL, the operator credential, or the session token value.
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function internalApiUrl(): string {
-  return (process.env.PAYMENTOPS_INTERNAL_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
-}
-
-// Hop-by-hop headers (RFC 7230 §6.1) plus headers we must not blindly forward.
 const HOP_BY_HOP = new Set([
   'connection',
   'keep-alive',
@@ -29,32 +33,55 @@ const HOP_BY_HOP = new Set([
   'host',
   'content-length',
   'accept-encoding',
+  'x-client-id',
+  'x-client-secret',
+  'x-actor-identity',
+  'x-session-token',
 ]);
 
-const ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function unauthorized(): NextResponse {
+  return NextResponse.json({ detail: 'Authentication required.' }, { status: 401 });
+}
+
+function forbidden(detail: string): NextResponse {
+  return NextResponse.json({ detail }, { status: 403 });
+}
 
 async function proxy(
   request: NextRequest,
   ctx: { params: Promise<{ path?: string[] }> },
 ): Promise<Response> {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const user = await validateSessionToken(token);
+  if (!user) return unauthorized();
+  if (!isAuthorizedTenant(user)) {
+    return forbidden('Your account is not authorized for this workspace.');
+  }
+
+  // CSRF: mutating requests must echo the double-submit token.
+  if (MUTATING_METHODS.has(request.method)) {
+    const cookieToken = request.cookies.get(CSRF_COOKIE)?.value;
+    const headerToken = request.headers.get('x-csrf-token');
+    if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+      return forbidden('Invalid or missing CSRF token.');
+    }
+  }
+
   const { path } = await ctx.params;
   const suffix = (path ?? []).map(encodeURIComponent).join('/');
   const target = `${internalApiUrl()}/${suffix}${request.nextUrl.search}`;
 
-  // Build outbound headers from safe inbound headers only.
   const outbound = new Headers();
   request.headers.forEach((value, key) => {
     if (!HOP_BY_HOP.has(key.toLowerCase())) outbound.set(key, value);
   });
   outbound.set('accept', request.headers.get('accept') ?? 'application/json');
 
-  // Inject server-side operator credentials (never exposed to the browser).
-  const clientId = process.env.PAYMENTOPS_CLIENT_ID;
-  const clientSecret = process.env.PAYMENTOPS_CLIENT_SECRET;
-  if (clientId && clientSecret) {
-    outbound.set('X-Client-Id', clientId);
-    outbound.set('X-Client-Secret', clientSecret);
-  }
+  // Inject the server-side operator credential and the trusted actor identity.
+  for (const [key, value] of Object.entries(operatorHeaders())) outbound.set(key, value);
+  outbound.set('X-Actor-Identity', user.email);
 
   const hasBody = !['GET', 'HEAD'].includes(request.method);
   const body = hasBody ? await request.arrayBuffer() : undefined;
@@ -69,11 +96,7 @@ async function proxy(
       cache: 'no-store',
     });
   } catch {
-    // Never log the request body or credentials. Return a structured, safe error.
-    return NextResponse.json(
-      { detail: 'Upstream PaymentOps API is unavailable.' },
-      { status: 502 },
-    );
+    return NextResponse.json({ detail: 'Upstream PaymentOps API is unavailable.' }, { status: 502 });
   }
 
   const responseHeaders = new Headers();
@@ -104,11 +127,5 @@ export async function DELETE(request: NextRequest, ctx: { params: Promise<{ path
   return proxy(request, ctx);
 }
 export async function HEAD(request: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
-  return proxy(request, ctx);
-}
-export async function OPTIONS(request: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
-  if (!ALLOWED_METHODS.includes(request.method)) {
-    return new NextResponse(null, { status: 405 });
-  }
   return proxy(request, ctx);
 }

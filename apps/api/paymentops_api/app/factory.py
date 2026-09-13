@@ -20,6 +20,7 @@ from paymentops_api.routers import (
     account,
     analyze,
     audit,
+    auth,
     batches,
     cases,
     clients,
@@ -137,6 +138,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(iso.router)
     app.include_router(account.router)
     app.include_router(audit.router)
+    app.include_router(auth.router)
 
     # Attach the analysis pipeline (deterministic engines) so routes can use it.
     provider = build_address_provider(settings)

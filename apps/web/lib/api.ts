@@ -51,6 +51,20 @@ function authHeaders(): Record<string, string> {
   };
 }
 
+// CSRF: echo the double-submit token (non-HttpOnly cookie) on mutating requests.
+function csrfHeader(method: string | undefined): Record<string, string> {
+  if (!method || ['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) return {};
+  if (typeof document === 'undefined') return {};
+  const match = document.cookie.match(/(?:^|; )paymentops_csrf=([^;]+)/);
+  return match ? { 'X-CSRF-Token': decodeURIComponent(match[1]) } : {};
+}
+
+function redirectToLogin() {
+  if (typeof window === 'undefined') return;
+  if (window.location.pathname === '/login') return;
+  window.location.href = '/login';
+}
+
 // Map backend structured errors into user-friendly messages (never expose stack traces).
 function parseError(status: number, body: unknown): ApiError {
   const detail =
@@ -87,7 +101,11 @@ export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     res = await fetch(`${API_BASE}${path}`, {
       ...init,
       signal: init?.signal ?? controller.signal,
-      headers: { ...authHeaders(), ...(init?.headers ?? {}) },
+      headers: {
+        ...authHeaders(),
+        ...csrfHeader(init?.method),
+        ...(init?.headers ?? {}),
+      },
     });
   } catch (e) {
     clearTimeout(timeout);
@@ -97,6 +115,10 @@ export async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError('Unable to reach the PaymentOps API.', 0);
   } finally {
     clearTimeout(timeout);
+  }
+  if (res.status === 401) {
+    redirectToLogin();
+    throw new ApiError('Your session has expired. Please sign in again.', 401);
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -467,7 +489,13 @@ export function getReconciliation(runId: string) {
 
 export function getReconciliationReport(runId: string) {
   return fetch(`${API_BASE}/api/v1/matching/reconciliations/${runId}/report`, { headers: authHeaders() })
-    .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`Report failed (${res.status})`))));
+    .then((res) => {
+      if (res.status === 401) {
+        redirectToLogin();
+        throw new ApiError('Your session has expired. Please sign in again.', 401);
+      }
+      return res.ok ? res.text() : Promise.reject(new Error(`Report failed (${res.status})`));
+    });
 }
 
 export function decideCandidate(candidateId: string, action: string, note?: string, operator?: string) {

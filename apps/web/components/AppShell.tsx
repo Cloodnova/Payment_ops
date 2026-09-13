@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
-  Bell,
   ClipboardCheck,
   Database,
   FileSearch,
@@ -83,11 +82,35 @@ export default function AppShell({
   organization?: string;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
+  const [user, setUser] = useState<{ display_name: string; role: string; email: string } | null>(null);
 
   useEffect(() => {
     setNavOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/session', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (active && body?.user) setUser(body.user);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      router.replace('/login');
+      router.refresh();
+    }
+  };
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -168,11 +191,15 @@ export default function AppShell({
             </span>
             <span className="row" aria-label="Signed-in user" style={{ gap: '0.5rem' }}>
               <span className="org-avatar" style={{ background: 'var(--cn-surface-2)', color: 'var(--cn-text-muted)' }}>
-                OP
+                {(user?.display_name ?? 'OP').slice(0, 2).toUpperCase()}
               </span>
-              <span className="small muted">Operator</span>
+              <span className="small muted">
+                {user ? `${user.display_name} · ${user.role}` : 'Operator'}
+              </span>
             </span>
-            <Bell size={16} className="muted" aria-hidden="true" />
+            <button className="btn btn-subtle btn-sm" onClick={logout} aria-label="Sign out">
+              Sign out
+            </button>
           </div>
         </header>
 

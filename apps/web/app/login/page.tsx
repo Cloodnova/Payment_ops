@@ -5,21 +5,54 @@ import { useRouter } from 'next/navigation';
 import { Lock, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui';
 
+const MARKETING_URL = process.env.NEXT_PUBLIC_MARKETING_URL ?? 'https://paymentops.cloudnova.tech';
+
+function safeNextPath(): string {
+  if (typeof window === 'undefined') return '/dashboard';
+  const next = new URLSearchParams(window.location.search).get('next');
+  if (next && next.startsWith('/') && !next.startsWith('//')) return next;
+  return '/dashboard';
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password) {
       setError('Enter your work email and password to continue.');
       return;
     }
-    // Operator access is authorized by the platform API client (server-configured).
-    // This screen is the console entry point; it does not perform credential validation.
-    router.push('/dashboard');
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      if (res.ok) {
+        router.replace(safeNextPath());
+        router.refresh();
+        return;
+      }
+      const body = (await res.json().catch(() => ({}))) as { detail?: string };
+      if (res.status === 503) {
+        setError('Service temporarily unavailable. Please try again shortly.');
+      } else if (res.status === 403) {
+        setError(body.detail ?? 'Account disabled. Contact your administrator.');
+      } else {
+        setError('Invalid email or password.');
+      }
+    } catch {
+      setError('Service temporarily unavailable. Please try again shortly.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -63,13 +96,14 @@ export default function LoginPage() {
 
           <form onSubmit={onSubmit} className="stack" style={{ marginTop: '1.75rem' }} aria-label="Sign in">
             <label>
-              <span className="field-label">Email or username</span>
+              <span className="field-label">Work email</span>
               <input
                 type="email"
                 autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                aria-label="Email or username"
+                aria-label="Work email"
+                required
               />
             </label>
             <label>
@@ -80,11 +114,12 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 aria-label="Password"
+                required
               />
             </label>
             {error ? <p className="small" style={{ color: 'var(--cn-danger)', margin: 0 }} role="alert">{error}</p> : null}
-            <Button type="submit">
-              <Lock size={14} /> Sign in
+            <Button type="submit" disabled={busy}>
+              <Lock size={14} /> {busy ? 'Signing in…' : 'Sign in'}
             </Button>
           </form>
 
@@ -92,6 +127,11 @@ export default function LoginPage() {
             <Button variant="ghost" disabled title="Enterprise SSO is not yet available" style={{ width: '100%' }}>
               Enterprise SSO — coming later
             </Button>
+          </div>
+
+          <div className="stack" style={{ marginTop: '1.25rem' }}>
+            <a className="small" href={MARKETING_URL}>Learn about PaymentOps</a>
+            <a className="small" href={`${MARKETING_URL}/request-demo`}>Request access / Request demo</a>
           </div>
 
           <p className="muted" style={{ marginTop: '1.75rem', fontSize: '0.72rem', lineHeight: 1.6 }}>

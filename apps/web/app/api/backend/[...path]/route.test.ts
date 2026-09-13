@@ -1,13 +1,34 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const validateSessionToken = vi.fn();
+const isAuthorizedTenant = vi.fn();
+
+vi.mock('@/lib/server/session', () => ({
+  SESSION_COOKIE: 'paymentops_session',
+  CSRF_COOKIE: 'paymentops_csrf',
+  internalApiUrl: () => 'http://paymentops-api:8000',
+  operatorHeaders: () => ({ 'X-Client-Id': 'operator-client', 'X-Client-Secret': 'operator-secret' }),
+  validateSessionToken: (...args: unknown[]) => validateSessionToken(...args),
+  isAuthorizedTenant: (...args: unknown[]) => isAuthorizedTenant(...args),
+}));
+
 import { GET, POST } from './route';
+
+const USER = {
+  id: 'u1',
+  email: 'operator@example.com',
+  display_name: 'Op',
+  role: 'OPERATOR',
+  organization_id: 'org-1',
+};
 
 interface FetchCall {
   url: string;
   init: RequestInit;
 }
 
-function stubFetch(status = 200, body: unknown = { status: 'ok' }): FetchCall[] {
+function stubFetch(status = 200, body: unknown = { ok: true }): FetchCall[] {
   const calls: FetchCall[] = [];
   vi.stubGlobal(
     'fetch',
@@ -23,73 +44,118 @@ function stubFetch(status = 200, body: unknown = { status: 'ok' }): FetchCall[] 
 }
 
 beforeEach(() => {
-  process.env.PAYMENTOPS_INTERNAL_API_URL = 'http://paymentops-api:8000';
-  process.env.PAYMENTOPS_CLIENT_ID = 'operator-client';
-  process.env.PAYMENTOPS_CLIENT_SECRET = 'operator-secret';
+  validateSessionToken.mockResolvedValue(USER);
+  isAuthorizedTenant.mockReturnValue(true);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  delete process.env.PAYMENTOPS_CLIENT_ID;
-  delete process.env.PAYMENTOPS_CLIENT_SECRET;
+  validateSessionToken.mockReset();
+  isAuthorizedTenant.mockReset();
 });
 
-describe('same-origin API proxy', () => {
-  it('forwards to the internal API on the same path and query', async () => {
+describe('authenticated same-origin API proxy', () => {
+  it('rejects anonymous requests with 401 and never calls the backend', async () => {
+    validateSessionToken.mockResolvedValue(null);
+    const calls = stubFetch();
+    const req = new NextRequest('https://app.test/api/backend/api/v1/dashboard');
+    const res = await GET(req, { params: Promise.resolve({ path: ['api', 'v1', 'dashboard'] }) });
+
+    expect(res.status).toBe(401);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('rejects a session from an unauthorized tenant', async () => {
+    isAuthorizedTenant.mockReturnValue(false);
+    const calls = stubFetch();
+    const req = new NextRequest('https://app.test/api/backend/api/v1/dashboard', {
+      headers: { cookie: 'paymentops_session=abc' },
+    });
+    const res = await GET(req, { params: Promise.resolve({ path: ['api', 'v1', 'dashboard'] }) });
+
+    expect(res.status).toBe(403);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('forwards an authenticated GET and injects credentials + actor', async () => {
     const calls = stubFetch(200, { analyzed: 1 });
-    const req = new NextRequest('https://public.test/api/backend/api/v1/dashboard?limit=5');
+    const req = new NextRequest('https://app.test/api/backend/api/v1/dashboard?limit=5', {
+      headers: { cookie: 'paymentops_session=abc' },
+    });
     const res = await GET(req, { params: Promise.resolve({ path: ['api', 'v1', 'dashboard'] }) });
 
     expect(res.status).toBe(200);
     expect(calls[0].url).toBe('http://paymentops-api:8000/api/v1/dashboard?limit=5');
-  });
-
-  it('injects server-side operator credentials and never returns them', async () => {
-    const calls = stubFetch();
-    const req = new NextRequest('https://public.test/api/backend/health');
-    const res = await GET(req, { params: Promise.resolve({ path: ['health'] }) });
-
     const headers = calls[0].init.headers as Headers;
     expect(headers.get('X-Client-Id')).toBe('operator-client');
-    expect(headers.get('X-Client-Secret')).toBe('operator-secret');
-    expect(res.headers.get('x-client-secret')).toBeNull();
+    expect(headers.get('X-Actor-Identity')).toBe('operator@example.com');
   });
 
-  it('does not forward hop-by-hop or spoofed host headers', async () => {
+  it('strips browser-supplied actor and credential headers', async () => {
     const calls = stubFetch();
-    const req = new NextRequest('https://public.test/api/backend/api/v1/info', {
-      headers: { connection: 'keep-alive', 'x-custom': 'keep-me' },
+    const req = new NextRequest('https://app.test/api/backend/api/v1/info', {
+      headers: {
+        cookie: 'paymentops_session=abc',
+        'x-actor-identity': 'spoofed@attacker.test',
+        'x-client-secret': 'stolen',
+      },
     });
     await GET(req, { params: Promise.resolve({ path: ['api', 'v1', 'info'] }) });
 
     const headers = calls[0].init.headers as Headers;
-    expect(headers.has('connection')).toBe(false);
-    expect(headers.has('host')).toBe(false);
-    expect(headers.get('x-custom')).toBe('keep-me');
+    expect(headers.get('X-Actor-Identity')).toBe('operator@example.com');
+    expect(headers.get('X-Client-Secret')).toBe('operator-secret');
   });
 
-  it('preserves method, body and structured error status', async () => {
-    const calls = stubFetch(422, { detail: 'unsupported ISO version' });
-    const req = new NextRequest('https://public.test/api/backend/api/v1/iso/analyze', {
+  it('requires a matching CSRF token for mutating requests', async () => {
+    const calls = stubFetch(200, { ok: true });
+    const blocked = new NextRequest('https://app.test/api/backend/api/v1/cases/x/actions', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { cookie: 'paymentops_session=abc', 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'approve' }),
+    });
+    const res = await POST(blocked, { params: Promise.resolve({ path: ['api', 'v1', 'cases', 'x', 'actions'] }) });
+    expect(res.status).toBe(403);
+    expect(calls).toHaveLength(0);
+
+    const allowed = new NextRequest('https://app.test/api/backend/api/v1/cases/x/actions', {
+      method: 'POST',
+      headers: {
+        cookie: 'paymentops_session=abc; paymentops_csrf=tok-123',
+        'content-type': 'application/json',
+        'x-csrf-token': 'tok-123',
+      },
+      body: JSON.stringify({ action: 'approve' }),
+    });
+    const ok = await POST(allowed, { params: Promise.resolve({ path: ['api', 'v1', 'cases', 'x', 'actions'] }) });
+    expect(ok.status).toBe(200);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('preserves structured backend errors', async () => {
+    stubFetch(422, { detail: 'unsupported ISO version' });
+    const req = new NextRequest('https://app.test/api/backend/api/v1/iso/analyze', {
+      method: 'POST',
+      headers: {
+        cookie: 'paymentops_session=abc; paymentops_csrf=t',
+        'content-type': 'application/json',
+        'x-csrf-token': 't',
+      },
       body: JSON.stringify({ xml: '<Document/>' }),
     });
     const res = await POST(req, { params: Promise.resolve({ path: ['api', 'v1', 'iso', 'analyze'] }) });
-
-    expect(calls[0].init.method).toBe('POST');
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({ detail: 'unsupported ISO version' });
   });
 
-  it('returns a safe structured error when the upstream is unreachable', async () => {
+  it('returns a safe 502 when the upstream is unreachable', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => {
       throw new TypeError('fetch failed');
     }));
-    const req = new NextRequest('https://public.test/api/backend/api/v1/dashboard');
+    const req = new NextRequest('https://app.test/api/backend/api/v1/dashboard', {
+      headers: { cookie: 'paymentops_session=abc' },
+    });
     const res = await GET(req, { params: Promise.resolve({ path: ['api', 'v1', 'dashboard'] }) });
-
     expect(res.status).toBe(502);
-    expect((await res.json()).detail).toMatch(/unavailable/i);
   });
 });

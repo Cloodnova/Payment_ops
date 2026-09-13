@@ -15,7 +15,12 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from paymentops_api.auth import AuthenticatedClient, get_api_client, get_db
+from paymentops_api.auth import (
+    AuthenticatedClient,
+    get_actor_identity,
+    get_api_client,
+    get_db,
+)
 from paymentops_api.db.models import (
     AccountBalanceRow,
     AccountEntryRow,
@@ -151,6 +156,7 @@ async def decide_account_reconciliation(
     reconciliation_id: str,
     body: DecideReconciliationRequest,
     client: AuthenticatedClient = Depends(get_api_client),
+    actor: str | None = Depends(get_actor_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     try:
@@ -159,7 +165,7 @@ async def decide_account_reconciliation(
             client.organization_id,
             reconciliation_id,
             body.action,
-            operator=body.operator,
+            operator=actor or body.operator,
             note=body.note,
         )
     except LookupError:

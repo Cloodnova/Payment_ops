@@ -7,7 +7,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from paymentops_api.auth import AuthenticatedClient, get_api_client, get_db
+from paymentops_api.auth import (
+    AuthenticatedClient,
+    get_actor_identity,
+    get_api_client,
+    get_db,
+)
 from paymentops_api.db.models import PaymentCase
 from paymentops_api.services import case_service
 
@@ -119,6 +124,7 @@ async def case_action(
     case_id: str,
     body: CaseActionRequest,
     client: AuthenticatedClient = Depends(get_api_client),
+    actor: str | None = Depends(get_actor_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     try:
@@ -127,7 +133,7 @@ async def case_action(
             client.organization_id,
             case_id,
             body.action,
-            operator=body.operator,
+            operator=actor or body.operator,
             note=body.note,
         )
     except LookupError:

@@ -21,7 +21,12 @@ from matching_engine import (
     MatchRecord,
     default_policy,
 )
-from paymentops_api.auth import AuthenticatedClient, get_api_client, get_db
+from paymentops_api.auth import (
+    AuthenticatedClient,
+    get_actor_identity,
+    get_api_client,
+    get_db,
+)
 from paymentops_api.db.models import MatchCandidate, MatchRecordRow, MatchRun
 from paymentops_api.queue import enqueue_reconciliation
 from paymentops_api.services import matching_service
@@ -256,6 +261,7 @@ async def decide_candidate(
     candidate_id: str,
     body: DecideRequest,
     client: AuthenticatedClient = Depends(get_api_client),
+    actor: str | None = Depends(get_actor_identity),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     try:
@@ -264,7 +270,7 @@ async def decide_candidate(
             client.organization_id,
             candidate_id,
             body.action,
-            operator=body.operator,
+            operator=actor or body.operator,
             note=body.note,
         )
     except LookupError:
