@@ -22,8 +22,8 @@ vi.mock('@/lib/server/session', () => ({
   isAuthorizedTenant: () => true,
 }));
 
-import { POST as login } from './app/api/auth/login/route';
-import { POST as logout } from './app/api/auth/logout/route';
+import { POST as login } from './login/route';
+import { POST as logout } from './logout/route';
 
 function jsonRequest(body: unknown): Request {
   return new Request('https://app.test/api/auth/login', {
