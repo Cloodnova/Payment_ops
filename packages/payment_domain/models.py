@@ -16,7 +16,7 @@ PRINCIPLES
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -41,6 +41,8 @@ class SourceFormat(StrEnum):
     XML_PACS_008 = "xml_pacs_008"
     XML_PACS_009 = "xml_pacs_009"
     XML_PAIN_001 = "xml_pain_001"
+    XML_CAMT_053 = "xml_camt_053"
+    XML_CAMT_054 = "xml_camt_054"
     JSON = "json"
     CSV = "csv"
     API = "api"
@@ -114,6 +116,8 @@ _PII_AND_FINANCIAL_FIELDS = {
     "debtor",
     "creditor",
     "financial_institution",
+    "account_id",
+    "account_servicer_reference",
 }
 
 _REDACTED = "[REDACTED]"
@@ -319,6 +323,13 @@ class LifecycleEventType(StrEnum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     UNKNOWN_STATUS = "UNKNOWN_STATUS"
+    # Week 6 account-reporting events.
+    ACCOUNT_NOTIFICATION = "ACCOUNT_NOTIFICATION"
+    ACCOUNT_STATEMENT_ENTRY = "ACCOUNT_STATEMENT_ENTRY"
+    DEBIT_RECORDED = "DEBIT_RECORDED"
+    CREDIT_RECORDED = "CREDIT_RECORDED"
+    ACCOUNT_EVENT_CONFIRMED = "ACCOUNT_EVENT_CONFIRMED"
+    ACCOUNT_EVENT_UNRESOLVED = "ACCOUNT_EVENT_UNRESOLVED"
 
 
 class PaymentStatus(StrEnum):
@@ -441,6 +452,169 @@ class PaymentLifecycle(PydanticWithRedaction):
     current_status: PaymentStatus = PaymentStatus.UNKNOWN
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+# ------------------------------------------------------------------ Week 6 account reporting
+
+
+class CreditDebitIndicator(StrEnum):
+    CRDT = "CRDT"
+    DBIT = "DBIT"
+
+
+class AccountReportType(StrEnum):
+    STATEMENT = "STATEMENT"  # camt.053
+    NOTIFICATION = "NOTIFICATION"  # camt.054
+
+
+class BalanceType(StrEnum):
+    OPENING = "OPBD"  # opening booked
+    CLOSING = "CLBD"  # closing booked
+    INTERIM = "ITBD"
+    AVAILABLE = "AVLB"
+    FORWARD_AVAILABLE = "FWAV"
+
+
+class AccountReconciliationStatus(StrEnum):
+    RECONCILED = "RECONCILED"
+    POSSIBLE_RECONCILIATION = "POSSIBLE_RECONCILIATION"
+    UNMATCHED_ACCOUNT_ENTRY = "UNMATCHED_ACCOUNT_ENTRY"
+    MISSING_ACCOUNT_EVENT = "MISSING_ACCOUNT_EVENT"
+    AMOUNT_MISMATCH = "AMOUNT_MISMATCH"
+    CURRENCY_MISMATCH = "CURRENCY_MISMATCH"
+    ACCOUNT_MISMATCH = "ACCOUNT_MISMATCH"
+    REFERENCE_MISMATCH = "REFERENCE_MISMATCH"
+    DUPLICATE_ACCOUNT_ENTRY = "DUPLICATE_ACCOUNT_ENTRY"
+    REVIEW_REQUIRED = "REVIEW_REQUIRED"
+
+
+class AccountReference(PydanticWithRedaction):
+    """An account identifier in a camt message."""
+
+    iban: str | None = None
+    other_identification: str | None = None
+    currency: str | None = None
+    name: str | None = None
+    servicer_bic: str | None = None
+
+
+class AccountBalance(PydanticWithRedaction):
+    """A statement balance (contextual reporting data, not accounting software)."""
+
+    type: BalanceType
+    amount: MonetaryAmount
+    credit_debit: CreditDebitIndicator = CreditDebitIndicator.CRDT
+
+
+class BankTransactionCode(PydanticWithRedaction):
+    code: str | None = None
+    proprietary: str | None = None
+    family: str | None = None
+    sub_family: str | None = None
+
+
+class EntryTransactionDetail(PydanticWithRedaction):
+    """Detailed references within an account entry's transaction details."""
+
+    transaction_id: str | None = None
+    instruction_id: str | None = None
+    end_to_end_id: str | None = None
+    uetr: str | None = None
+    amount: MonetaryAmount | None = None
+    remittance_reference: str | None = None
+
+
+class AccountEntry(PydanticWithRedaction):
+    """A single account movement (shared canonical across camt.053 and camt.054)."""
+
+    entry_reference: str | None = None
+    account_servicer_reference: str | None = None
+    transaction_id: str | None = None
+    instruction_id: str | None = None
+    end_to_end_id: str | None = None
+    uetr: str | None = None
+    amount: MonetaryAmount | None = None
+    currency: str | None = None
+    credit_debit: CreditDebitIndicator | None = None
+    booking_date: date | None = None
+    value_date: date | None = None
+    status: str | None = None
+    bank_transaction_code: BankTransactionCode | None = None
+    remittance_reference: str | None = None
+    debtor: Party | None = None
+    creditor: Party | None = None
+    related_agents: list[str] = Field(default_factory=list)
+    original_message_reference: str | None = None
+    source_message_id: str | None = None
+    source_hash: str | None = None
+    # Filled by the reconciliation service (analytical, not part of raw evidence).
+    reconciliation_status: AccountReconciliationStatus | None = None
+    match_score: float | None = None
+    evidence: list[str] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+
+    @property
+    def identity_hash(self) -> str:
+        """Deterministic entry identity (strong identifiers + amount/date context)."""
+        from hashlib import sha256
+
+        parts = [
+            str(self.account_servicer_reference or ""),
+            str(self.transaction_id or ""),
+            str(self.end_to_end_id or ""),
+            str(self.uetr or ""),
+            str(self.instruction_id or ""),
+            str(self.entry_reference or ""),
+            str(self.amount.amount_minor if self.amount else ""),
+            str(self.currency or ""),
+            str(self.credit_debit.value if self.credit_debit else ""),
+        ]
+        return sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
+class AccountReport(PydanticWithRedaction):
+    """Canonical account report (camt.053 statement or camt.054 notification).
+
+    Both produce the same ``entries`` shape so downstream reconciliation logic is shared.
+    """
+
+    message_family: str | None = None
+    message_definition: str | None = None
+    message_version: str | None = None
+    namespace: str | None = None
+    message_id: str | None = None
+    creation_datetime: datetime | None = None
+    report_type: AccountReportType
+    account: AccountReference | None = None
+    statement_id: str | None = None
+    notification_id: str | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    balances: list[AccountBalance] = Field(default_factory=list)
+    entries: list[AccountEntry] = Field(default_factory=list)
+    source_hash: str | None = None
+
+    @property
+    def number_of_entries(self) -> int:
+        return len(self.entries)
+
+
+class AccountReportBundle(PydanticWithRedaction):
+    """One camt message may contain multiple statements/notifications."""
+
+    message_family: str | None = None
+    message_definition: str | None = None
+    message_version: str | None = None
+    namespace: str | None = None
+    message_id: str | None = None
+    creation_datetime: datetime | None = None
+    report_type: AccountReportType
+    reports: list[AccountReport] = Field(default_factory=list)
+    source_hash: str | None = None
+
+    @property
+    def number_of_entries(self) -> int:
+        return sum(r.number_of_entries for r in self.reports)
 
 
 def utcnow() -> datetime:

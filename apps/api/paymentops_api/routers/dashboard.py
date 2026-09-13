@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from paymentops_api.auth import AuthenticatedClient, get_api_client, get_db
-from paymentops_api.db.models import BatchJob, PaymentCase
+from paymentops_api.db.models import AccountEntryRow, BatchJob, PaymentCase
 
 router = APIRouter(tags=["dashboard"])
 
@@ -21,7 +21,9 @@ async def dashboard(
 ) -> dict[str, object]:
     org = client.organization_id
 
-    readiness = await _count_by(session, PaymentCase.address_readiness, org)
+    readiness = await _count_by(
+        session, PaymentCase.address_readiness, PaymentCase.organization_id, org
+    )
     open_cases = await session.scalar(
         select(func.count())
         .select_from(PaymentCase)
@@ -48,6 +50,13 @@ async def dashboard(
     for rule_id, count in result.all():
         top_findings[str(rule_id)] = int(count)
 
+    # Week 6 account-reconciliation metrics.
+    account = await _count_by(
+        session, AccountEntryRow.reconciliation_status, AccountEntryRow.organization_id, org
+    )
+    total_entries = sum(account.values())
+    reconciled = account.get("RECONCILED", 0)
+
     return {
         "analyzed": int(sum(readiness.values())),
         "ready": readiness.get("READY", 0),
@@ -57,12 +66,24 @@ async def dashboard(
         "open_cases": int(open_cases or 0),
         "running_batches": int(running_batches or 0),
         "top_findings": dict(sorted(top_findings.items(), key=lambda x: -x[1])[:10]),
+        "account_entries": total_entries,
+        "account_reconciled": reconciled,
+        "missing_account_event": account.get("MISSING_ACCOUNT_EVENT", 0),
+        "account_mismatches": account.get("ACCOUNT_MISMATCH", 0)
+        + account.get("AMOUNT_MISMATCH", 0)
+        + account.get("CURRENCY_MISMATCH", 0),
+        "unmatched_entries": account.get("UNMATCHED_ACCOUNT_ENTRY", 0),
+        "duplicate_entries": account.get("DUPLICATE_ACCOUNT_ENTRY", 0),
+        "reconciliation_rate": round(100.0 * reconciled / total_entries, 2)
+        if total_entries
+        else 0.0,
     }
 
 
-async def _count_by(session: AsyncSession, column: Any, org: str) -> dict[str, int]:
+async def _count_by(
+    session: AsyncSession, column: Any, org_column: Any, org: str
+) -> dict[str, int]:
     result = await session.execute(
-        select(column, func.count()).where(PaymentCase.organization_id == org).group_by(column)
+        select(column, func.count()).where(org_column == org).group_by(column)
     )
-    return {str(k): int(v) for k, v in result.all()}
     return {str(k): int(v) for k, v in result.all()}

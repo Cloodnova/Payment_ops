@@ -20,6 +20,8 @@ def test_default_registry_registers_supported_messages():
         "pain.001.001.13",
         "pacs.002.001.16",
         "pacs.009.001.13",
+        "camt.053.001.14",
+        "camt.054.001.14",
     }
     pacs008 = next(d for d in defs if d.version == "pacs.008.001.08")
     assert pacs008.message_family == "pacs"

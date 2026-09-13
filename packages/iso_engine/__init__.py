@@ -7,6 +7,12 @@ overridden by AI or heuristic output (ADR-005).
 
 from __future__ import annotations
 
+from iso_engine.camt053.adapter import map_camt053_to_account_report
+from iso_engine.camt053.identifier import identify_camt053
+from iso_engine.camt053.namespace import SUPPORTED_CAMT_053_VERSIONS
+from iso_engine.camt054.adapter import map_camt054_to_account_report
+from iso_engine.camt054.identifier import identify_camt054
+from iso_engine.camt054.namespace import SUPPORTED_CAMT_054_VERSIONS
 from iso_engine.common import IsoMessageMetadata
 from iso_engine.pacs002.adapter import map_pacs002_to_status
 from iso_engine.pacs002.identifier import identify_pacs002
@@ -49,6 +55,8 @@ __all__ = [
     "RegisteredMessage",
     "SchemaIssue",
     "SchemaValidationResult",
+    "SUPPORTED_CAMT_053_VERSIONS",
+    "SUPPORTED_CAMT_054_VERSIONS",
     "SUPPORTED_PACS_002_VERSIONS",
     "SUPPORTED_PACS_008_VERSIONS",
     "SUPPORTED_PACS_009_VERSIONS",
@@ -59,10 +67,14 @@ __all__ = [
     "UnsupportedMessageTypeError",
     "XmlError",
     "build_default_registry",
+    "identify_camt053",
+    "identify_camt054",
     "identify_pacs002",
     "identify_pacs008",
     "identify_pacs009",
     "identify_pain001",
+    "map_camt053_to_account_report",
+    "map_camt054_to_account_report",
     "map_pacs002_to_status",
     "map_pacs008_to_canonical",
     "map_pacs009_to_canonical",

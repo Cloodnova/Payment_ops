@@ -35,6 +35,7 @@ from iso_engine.registry import IsoMessageRegistry
 from iso_engine.xml_security import SecureXmlDocument, secure_parse
 from iso_engine.xsd_validator import SchemaValidationResult, validate_message, validate_pacs008
 from payment_domain.models import (
+    AccountReportBundle,
     AddressReadiness,
     LifecycleStatusReport,
     PaymentMessage,
@@ -121,7 +122,48 @@ class AnalysisPipeline:
             return self._iso_payment_result(
                 artifact, metadata, xsd_result, doc=doc, max_transactions=max_transactions
             )
+        if isinstance(artifact, AccountReportBundle):
+            return self._iso_account_result(
+                artifact, metadata, xsd_result, max_entries=max_transactions
+            )
         raise TypeError(f"adapter produced unsupported artifact type: {type(artifact)}")
+
+    def _iso_account_result(
+        self,
+        bundle: AccountReportBundle,
+        metadata: IsoMessageMetadata,
+        xsd_result: SchemaValidationResult,
+        *,
+        max_entries: int,
+    ) -> IsoAnalysisResult:
+        if bundle.number_of_entries > max_entries:
+            from iso_engine.xml_errors import PayloadTooLargeError
+
+            raise PayloadTooLargeError(f"message exceeds {max_entries} account entries")
+        # Address intelligence is NOT run for account reporting (Task 50/address rule).
+        return IsoAnalysisResult(
+            case_id=f"case-{uuid4().hex[:16]}",
+            message_family=metadata.message_family,
+            message_definition=metadata.message_definition,
+            message_version=metadata.message_version,
+            namespace=metadata.namespace,
+            message_id=metadata.message_id,
+            adapter_version=metadata.adapter_version,
+            schema_validation=xsd_result.valid,
+            schema_version=metadata.schema_version,
+            original_validation_status="valid" if xsd_result.valid else "invalid",
+            schema_issues=[
+                AnalysisIssue(code=i.code, severity=i.severity, path=i.path, message=i.message)
+                for i in xsd_result.issues
+            ],
+            canonical_model_version="payment_domain.v3",
+            engine_version=ENGINE_VERSION,
+            input_hash=_message_hash(bundle),
+            account_report_type=bundle.report_type.value,
+            account_reports=[r.model_dump(mode="json") for r in bundle.reports],
+            account_entry_count=bundle.number_of_entries,
+            warnings=[] if xsd_result.valid else ["Original message did not pass XSD validation"],
+        )
 
     def _iso_payment_result(
         self,

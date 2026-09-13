@@ -44,6 +44,10 @@ def build_celery(broker_url: str, result_backend: str) -> Celery:
     from paymentops_worker.reconciliation_tasks import make_reconcile_task
 
     make_reconcile_task(app)
+    # Async account-reconciliation task (Week 6).
+    from paymentops_worker.account_tasks import make_account_reconcile_task
+
+    make_account_reconcile_task(app)
     return app
 
 

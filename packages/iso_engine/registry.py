@@ -91,6 +91,12 @@ class UnsupportedMessageError(Exception):
 
 def build_default_registry() -> IsoMessageRegistry:
     """Build the registry with the currently supported messages."""
+    from iso_engine.camt053.adapter import map_camt053_to_account_report
+    from iso_engine.camt053.identifier import identify_camt053
+    from iso_engine.camt053.namespace import SUPPORTED_CAMT_053_VERSIONS
+    from iso_engine.camt054.adapter import map_camt054_to_account_report
+    from iso_engine.camt054.identifier import identify_camt054
+    from iso_engine.camt054.namespace import SUPPORTED_CAMT_054_VERSIONS
     from iso_engine.pacs002.adapter import map_pacs002_to_status
     from iso_engine.pacs002.identifier import identify_pacs002
     from iso_engine.pacs002.namespace import SUPPORTED_PACS_002_VERSIONS
@@ -135,4 +141,10 @@ def build_default_registry() -> IsoMessageRegistry:
     _register(SUPPORTED_PAIN_001_VERSIONS, map_pain001_to_canonical, identify_pain001, "pain", "")
     _register(SUPPORTED_PACS_002_VERSIONS, map_pacs002_to_status, identify_pacs002, "pacs", "")
     _register(SUPPORTED_PACS_009_VERSIONS, map_pacs009_to_canonical, identify_pacs009, "pacs", "")
+    _register(
+        SUPPORTED_CAMT_053_VERSIONS, map_camt053_to_account_report, identify_camt053, "camt", ""
+    )
+    _register(
+        SUPPORTED_CAMT_054_VERSIONS, map_camt054_to_account_report, identify_camt054, "camt", ""
+    )
     return registry

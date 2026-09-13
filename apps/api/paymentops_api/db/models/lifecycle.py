@@ -62,6 +62,8 @@ class PaymentLifecycleRow(Base):
     transaction_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     uetr: Mapped[str | None] = mapped_column(String(64), nullable=True)
     original_message_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    debtor_account: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    creditor_account: Mapped[str | None] = mapped_column(String(64), nullable=True)
     amount_minor: Mapped[int | None] = mapped_column(nullable=True)
     currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     current_status: Mapped[str] = mapped_column(String(32), nullable=False, default="UNKNOWN")

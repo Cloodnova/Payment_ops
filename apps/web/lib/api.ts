@@ -429,6 +429,113 @@ export function decideCorrelation(lifecycleId: string, correlationId: string, ac
   );
 }
 
+// ---------------------------------------------------------------- Account reporting (camt)
+
+export interface AccountBalance {
+  balance_type: string;
+  amount_minor: number;
+  currency: string;
+  credit_debit: string;
+}
+
+export interface AccountEntry {
+  id: string;
+  report_id: string;
+  entry_reference?: string | null;
+  account_servicer_reference?: string | null;
+  transaction_id?: string | null;
+  instruction_id?: string | null;
+  end_to_end_id?: string | null;
+  uetr?: string | null;
+  amount_minor?: number | null;
+  currency?: string | null;
+  credit_debit?: string | null;
+  booking_date?: string | null;
+  value_date?: string | null;
+  status?: string | null;
+  bank_tx_code?: string | null;
+  bank_tx_family?: string | null;
+  bank_tx_sub_family?: string | null;
+  remittance_reference?: string | null;
+  reconciliation_status?: string | null;
+  match_score?: number | null;
+  lifecycle_id?: string | null;
+  evidence?: string[];
+  conflicts?: string[];
+  created_at?: string | null;
+}
+
+export interface AccountReport {
+  id: string;
+  message_id?: string | null;
+  message_definition: string;
+  message_version: string;
+  report_type: string;
+  account_iban?: string | null;
+  account_currency?: string | null;
+  statement_id?: string | null;
+  notification_id?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  entry_count: number;
+  created_at?: string | null;
+  balances?: AccountBalance[];
+  entries?: AccountEntry[];
+  reconciliation_summary?: Record<string, number>;
+}
+
+export interface AccountReconciliation {
+  id: string;
+  account_entry_id: string;
+  lifecycle_id?: string | null;
+  classification: string;
+  match_score: number;
+  evidence: string[];
+  conflicts: string[];
+  status: string;
+  operator?: string | null;
+  note?: string | null;
+  created_at?: string | null;
+}
+
+export function listAccountReports(params: { report_type?: string; account?: string } = {}) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+  return apiJson<AccountReport[]>(`/api/v1/account-reports?${q.toString()}`);
+}
+
+export function getAccountReport(id: string) {
+  return apiJson<AccountReport>(`/api/v1/account-reports/${id}`);
+}
+
+export function listAccountEntries(params: { report_id?: string; credit_debit?: string; reconciliation_status?: string } = {}) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+  return apiJson<AccountEntry[]>(`/api/v1/account-entries?${q.toString()}`);
+}
+
+export function getAccountEntry(id: string) {
+  return apiJson<AccountEntry>(`/api/v1/account-entries/${id}`);
+}
+
+export function listAccountReconciliations() {
+  return apiJson<AccountReconciliation[]>('/api/v1/account-reconciliations');
+}
+
+export function decideAccountReconciliation(id: string, action: string, note?: string, operator?: string) {
+  return apiJson<{ reconciliation_id: string; status: string; action: string }>(
+    `/api/v1/account-reconciliations/${id}/decide`,
+    { method: 'POST', body: JSON.stringify({ action, note, operator }) },
+  );
+}
+
+export function runAccountReconciliation(windowHours = 48) {
+  return apiJson<{ missing_account_events: string[]; count: number }>('/api/v1/account-reconciliation/run', {
+    method: 'POST',
+    body: JSON.stringify({ window_hours: windowHours }),
+  });
+}
+
 async function safeJson<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${API_BASE}${path}`, {

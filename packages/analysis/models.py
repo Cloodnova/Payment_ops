@@ -97,4 +97,10 @@ class IsoAnalysisResult(BaseModel):
     raw_status: str | None = None
     normalized_status: str | None = None
     correlation_profiles: list[dict[str, Any]] = Field(default_factory=list)
+    # Week 6 account-reporting fields.
+    account_report_type: str | None = None
+    account_reports: list[dict[str, Any]] = Field(default_factory=list)
+    account_report_ids: list[str] = Field(default_factory=list)
+    account_entry_count: int = 0
+    account_reconciliation: list[dict[str, Any]] = Field(default_factory=list)
     processed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

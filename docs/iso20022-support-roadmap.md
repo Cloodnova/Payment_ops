@@ -23,6 +23,8 @@ Unsupported versions fail with a clear `UnsupportedMessageError` — never silen
 | pain.001 | 001.13 | **Supported** (parser + XSD validation + canonical mapper + lifecycle) |
 | pacs.002 | 001.16 | **Supported** (status report parser + XSD validation + lifecycle correlation) |
 | pacs.009 | 001.13 | **Supported** (FI-to-FI parser + XSD validation + canonical mapper + lifecycle) |
+| camt.053 | 001.14 | **Supported** (statement parser + XSD validation + account entries + reconciliation) |
+| camt.054 | 001.14 | **Supported** (notification parser + XSD validation + account entries + reconciliation) |
 
 ## Planned sequence (v1)
 
@@ -30,12 +32,12 @@ Unsupported versions fail with a clear `UnsupportedMessageError` — never silen
 2. pain.001 — **done**
 3. pacs.002 — **done**
 4. pacs.009 — **done**
-5. camt.053 — planned
-6. camt.054 — planned
+5. camt.053 — **done**
+6. camt.054 — **done**
 
 ## Constraints
 
-- Week 5 added pain.001.001.13, pacs.002.001.16, pacs.009.001.13. Only these exact versions
-  are supported; no family-only dispatch.
+- Week 6 added camt.053.001.14 and camt.054.001.14. Only these exact versions are supported;
+  no family-only dispatch.
 - Unsupported versions fail with a structured error, never silently parsed.
 - No claim of support for messages not listed under "Current support".

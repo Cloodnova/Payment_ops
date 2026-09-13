@@ -23,6 +23,17 @@ an external provisioning step. Validation is never weakened to avoid licensing w
 | pain.001 | pain.001.001.13 | CloudNova-authored subset using real ISO namespace | Week 5 | (see file) | CloudNova subset; official schema external | Yes | Subset only, real namespace |
 | pacs.002 | pacs.002.001.16 | CloudNova-authored subset using real ISO namespace | Week 5 | (see file) | CloudNova subset; official schema external | Yes | Subset only, real namespace |
 | pacs.009 | pacs.009.001.13 | CloudNova-authored subset using real ISO namespace | Week 5 | (see file) | CloudNova subset; official schema external | Yes | Subset only, real namespace |
+| camt.053 | camt.053.001.14 | CloudNova-authored subset using real ISO namespace | Week 6 | (see file) | CloudNova subset; official schema external | Yes | Subset only, real namespace |
+| camt.054 | camt.054.001.14 | CloudNova-authored subset using real ISO namespace | Week 6 | (see file) | CloudNova subset; official schema external | Yes | Subset only, real namespace |
+
+## camt subset scope
+
+- camt.053.001.14 subset covers: `GrpHdr` (MsgId, CreDtTm), `Stmt` (Id, ElctrncSeqNb, CreDtTm,
+  Acct, FrToDt, Bal, Ntry), `Bal` (Tp/CdOrPrtry/Cd, Amt, CdtDbtInd), `Ntry` (NtryRef, Amt,
+  CdtDbtInd, Sts, BookgDt, ValDt, AcctSvcrRef, BkTxCd, NtryDtls/TxDtls).
+- camt.054.001.14 subset covers: `GrpHdr`, `Ntfctn` (Id, ElctrncSeqNb, CreDtTm, Acct, Ntry),
+  and the same `Ntry` structure.
+- Neither subset is a full official ISO schema; both use the real ISO targetNamespace.
 
 ## Modifications
 

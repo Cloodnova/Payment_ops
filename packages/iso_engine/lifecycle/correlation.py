@@ -41,6 +41,8 @@ class CorrelationProfile:
     currency: str | None = None
     reference: str | None = None
     account: str | None = None
+    debtor_account: str | None = None
+    creditor_account: str | None = None
 
 
 @dataclass
@@ -66,6 +68,10 @@ def profile_from_transaction(tx: Any, *, message_id: str | None) -> CorrelationP
         ),
         account=(tx.creditor_account.iban if tx.creditor_account else None)
         or (tx.debtor_account.iban if tx.debtor_account else None),
+        debtor_account=(tx.debtor_account.iban if tx.debtor_account else None)
+        or (tx.debtor_account.other_identification if tx.debtor_account else None),
+        creditor_account=(tx.creditor_account.iban if tx.creditor_account else None)
+        or (tx.creditor_account.other_identification if tx.creditor_account else None),
     )
 
 

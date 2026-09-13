@@ -46,8 +46,29 @@ async def analyze_iso_message(
         return result
 
     iso_row = await _persist_iso_message(session, org, result, msg_hash)
-    await _correlate_and_build_lifecycle(session, org, result, iso_row)
+    if result.account_reports:
+        from paymentops_api.services import account_service
+
+        reports = await account_service.ingest_account_report(session, org, result, iso_row.id)
+        result.account_report_ids = [str(r.id) for r in reports]
+        result.correlation_status = _account_correlation_status(result.account_reports)
+    else:
+        await _correlate_and_build_lifecycle(session, org, result, iso_row)
     return result
+
+
+def _account_correlation_status(reports: list[dict[str, Any]]) -> str:
+    classifications = {
+        entry.get("reconciliation_status")
+        for report in reports
+        for entry in (report.get("entries") or [])
+        if entry.get("reconciliation_status")
+    }
+    if "RECONCILED" in classifications:
+        return "CORRELATED"
+    if classifications:
+        return "UNRESOLVED"
+    return "UNRESOLVED"
 
 
 def _message_hash_from_result(result: IsoAnalysisResult) -> str:
@@ -145,6 +166,8 @@ async def _correlate_and_build_lifecycle(
                 instruction_id=profile.instruction_id,
                 transaction_id=profile.transaction_id,
                 original_message_id=profile.original_message_id,
+                debtor_account=profile.debtor_account,
+                creditor_account=profile.creditor_account,
                 amount_minor=profile.amount,
                 currency=profile.currency,
                 current_status="UNKNOWN",
@@ -217,6 +240,8 @@ def _profile_from_lifecycle(lifecycle: PaymentLifecycleRow) -> CorrelationProfil
         transaction_id=lifecycle.transaction_id,
         amount=lifecycle.amount_minor,
         currency=lifecycle.currency,
+        debtor_account=lifecycle.debtor_account,
+        creditor_account=lifecycle.creditor_account,
     )
 
 

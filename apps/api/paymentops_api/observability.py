@@ -159,6 +159,28 @@ iso_unsupported_versions_total = Counter(
     ("family",),
 )
 
+# Week 6 account-reporting metrics (low-cardinality labels only).
+account_reports_total = Counter(
+    "paymentops_account_reports_total",
+    "Account reports ingested",
+    ("report_type", "version"),
+)
+account_entries_total = Counter(
+    "paymentops_account_entries_total",
+    "Account entries ingested",
+    ("credit_debit",),
+)
+account_reconciliations_total = Counter(
+    "paymentops_account_reconciliations_total",
+    "Account reconciliations",
+    ("classification",),
+)
+missing_account_events_total = Counter(
+    "paymentops_missing_account_events_total",
+    "Missing account events detected",
+    (),
+)
+
 
 class MetricAddressProvider(AddressProvider):
     """Wraps an :class:`AddressProvider`, recording low-cardinality metrics per request.
