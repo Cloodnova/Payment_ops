@@ -24,13 +24,9 @@ export interface ReadinessResult {
   checks: ReadinessCheck[];
 }
 
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-
-// Week 3: a bootstrap admin client for the operator UI (dev). In production the operator
-// UI would authenticate via the platform IdP.
-const ADMIN_CLIENT_ID = process.env.NEXT_PUBLIC_ADMIN_CLIENT_ID ?? '';
-const ADMIN_CLIENT_SECRET = process.env.NEXT_PUBLIC_ADMIN_CLIENT_SECRET ?? '';
+// Browser-facing base URL. Same-origin proxy path by default; the browser never talks to the
+// internal Kubernetes service. Override only with a same-origin path in production.
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api/backend';
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -46,10 +42,10 @@ export class ApiError extends Error {
   }
 }
 
+// Operator credentials are injected server-side by the /api/backend proxy. The browser must
+// never hold API secrets, so no credential headers are set here.
 function authHeaders(): Record<string, string> {
   return {
-    'X-Client-Id': ADMIN_CLIENT_ID,
-    'X-Client-Secret': ADMIN_CLIENT_SECRET,
     Accept: 'application/json',
     'Content-Type': 'application/json',
   };
