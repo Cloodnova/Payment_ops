@@ -22,6 +22,21 @@ human review — producing corrected output, reports, and an auditable trail.
 
 > PaymentOps is non-transactional. It does not execute or authorize payments.
 
+## Evaluation release (`v0.1.0-eval`)
+
+This repository is at the **v1 Evaluation Release**, intended for controlled bank/fintech
+proof-of-concept engagements (not general availability).
+
+- Release notes: `docs/RELEASE_NOTES.md`
+- Release report & recommendation: `docs/release-report-v0.1.0-eval.md`
+- Operations runbook: `docs/runbooks/operations.md`
+- Demo script: `docs/demo-script.md`
+- PoC package & security questionnaire: `docs/poc-package.md`
+- Performance baseline: `docs/performance-baseline.md`
+- Authentication & sessions: `docs/authentication.md`
+
+The live build reports its `version`, `build_sha`, and `build_date` at `GET /api/v1/info`.
+
 ## Architecture
 
 The application is a **modular monolith** (ADR-001). Components are separated into
